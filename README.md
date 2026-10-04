@@ -4,61 +4,63 @@ Modern Enigma2/OpenATV picon manager for Vu+ receivers.
 
 ## Current online release
 
-- Version: **1.4.0-r0**
-- Package: `enigma2-plugin-extensions-piconmanagerpro_1.4.0-r0_all.ipk`
-- Size: **36,916 bytes**
-- SHA-256: `8f7fd60e957e8a0219ffb4586839aaad5b1f2a4787c2fcaaa3ffc46cbdfae48d`
+- Version: **1.5.0-r0**
+- Plugin version: **1.5.0**
+- Package: `enigma2-plugin-extensions-piconmanagerpro_1.5.0-r0_all.ipk`
+- Size: **38,626 bytes**
+- SHA-256: `fc273972376b227f3c0c9c08c217dd960fbcc9e4674d44cab31c2b45db49c971`
 - Target: OpenATV / Enigma2
 
-## Install directly from GitHub
+## New in 1.5.0 — In-app Online Update
 
-Run this command on the receiver:
+PiconManager Pro can now update itself directly from GitHub.
 
-```sh
-wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | sh
-```
+On the receiver:
 
-No manual IPK transfer is required.
+1. Open **PiconManager Pro**.
+2. Press **MENU**.
+3. Select **Online Update — vérifier GitHub**.
+4. The plugin compares the installed version with `update.json`.
+5. If a newer version exists, confirm the installation.
+6. The package is downloaded from GitHub, its size and SHA-256 are verified, then it is installed with `opkg`.
+7. PiconManager Pro asks whether Enigma2 should be restarted.
 
-The installer:
-1. downloads `update.json` from GitHub;
-2. downloads the current IPK directly from GitHub;
-3. checks package size and SHA-256;
-4. installs or updates with `opkg`;
-5. runs `piconmanagerpro-check` when available;
-6. restarts the Enigma2 GUI.
+No PC, phone transfer, FTP, USB or manual `/tmp` copy is required after version 1.5.0 is installed.
 
-If the direct IPK URL cannot be downloaded, the installer has a GitHub-hosted multipart fallback.
+## First installation / upgrade from 1.4.0
 
-## Online update
-
-Use the same command again:
+Version 1.4.0 does not yet contain the in-app updater, so upgrade to 1.5.0 once with:
 
 ```sh
 wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | sh
 ```
 
-Future releases only require updating `update.json` and publishing the new package. The receiver-side command stays the same.
+After that, future updates are available directly inside PiconManager Pro through **MENU → Online Update**.
 
-## Install without automatic GUI restart
+## Online installer
+
+The same command can always be used as a recovery or first-install method:
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | PICONMANAGERPRO_NO_RESTART=1 sh
+wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | sh
 ```
+
+The installer reads the same GitHub `update.json` channel used by the application.
+
+## Update security
+
+Before `opkg` is allowed to install a downloaded package, PiconManager Pro verifies:
+
+- package size from the GitHub manifest;
+- full SHA-256 checksum;
+- package/version metadata;
+- download availability, with a GitHub multipart fallback.
+
+If the size or checksum does not match, installation is cancelled.
 
 ## Repository layout
 
-- `install.sh` — online installer/updater
-- `update.json` — release manifest
-- `packages/enigma2-plugin-extensions-piconmanagerpro_1.4.0-r0_all.ipk` — direct install package
-- `packages/1.4.0-r0/part01...part09` — verified fallback copy
-
-## Diagnostics
-
-After installation:
-
-```sh
-piconmanagerpro-check
-```
-
-PiconManager Pro should not report a successful application when zero picons were actually applied.
+- `install.sh` — online bootstrap/recovery installer
+- `update.json` — official online-update manifest
+- `packages/1.5.0-r0/part01...part09` — verified 1.5.0-r0 package payload
+- `packages/1.4.0-r0/` — previous release fallback
