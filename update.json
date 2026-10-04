@@ -5,6 +5,6 @@
   "sha256": "8f7fd60e957e8a0219ffb4586839aaad5b1f2a4787c2fcaaa3ffc46cbdfae48d",
   "size": 36916,
   "encoding": "base64-parts",
-  "parts": 7,
+  "parts": 9,
   "parts_base_url": "https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/packages/1.4.0-r0"
 }
