@@ -2,34 +2,63 @@
 
 Modern Enigma2/OpenATV picon manager for Vu+ receivers.
 
-## Current release
-- Version: 1.4.0-r0
+## Current online release
+
+- Version: **1.4.0-r0**
 - Package: `enigma2-plugin-extensions-piconmanagerpro_1.4.0-r0_all.ipk`
+- Size: **36,916 bytes**
+- SHA-256: `8f7fd60e957e8a0219ffb4586839aaad5b1f2a4787c2fcaaa3ffc46cbdfae48d`
 - Target: OpenATV / Enigma2
-- Sources supported by the plugin: OpenPicons/picons, LyngSat Logo, Chocholousek packs, Global HD fallback, local picons.
 
-## Online installation
+## Install directly from GitHub
 
-Run on the receiver:
+Run this command on the receiver:
 
 ```sh
 wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | sh
 ```
 
-The installer downloads the current IPK from this repository, verifies its SHA-256 checksum when `sha256sum` is available, installs it with `opkg`, removes the temporary package, and restarts Enigma2.
+No manual IPK transfer is required.
+
+The installer:
+1. downloads `update.json` from GitHub;
+2. downloads the current IPK directly from GitHub;
+3. checks package size and SHA-256;
+4. installs or updates with `opkg`;
+5. runs `piconmanagerpro-check` when available;
+6. restarts the Enigma2 GUI.
+
+If the direct IPK URL cannot be downloaded, the installer has a GitHub-hosted multipart fallback.
 
 ## Online update
 
-Re-run the same command. The installer always reads `update.json` first, so future versions can be published without changing the receiver command.
+Use the same command again:
+
+```sh
+wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | sh
+```
+
+Future releases only require updating `update.json` and publishing the new package. The receiver-side command stays the same.
+
+## Install without automatic GUI restart
+
+```sh
+wget -qO- https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/install.sh | PICONMANAGERPRO_NO_RESTART=1 sh
+```
 
 ## Repository layout
 
-- `install.sh` — network installer/updater
-- `update.json` — current release manifest
-- `packages/` — installable IPK packages
-- `src/` — plugin source
-- `tools/` — receiver-side diagnostic helpers
+- `install.sh` — online installer/updater
+- `update.json` — release manifest
+- `packages/enigma2-plugin-extensions-piconmanagerpro_1.4.0-r0_all.ipk` — direct install package
+- `packages/1.4.0-r0/part01...part09` — verified fallback copy
 
-## Important
+## Diagnostics
 
-PiconManager Pro does not declare success when zero picons are applied. Check `/tmp/piconmanagerpro.log` and run `piconmanagerpro-check` for diagnostics.
+After installation:
+
+```sh
+piconmanagerpro-check
+```
+
+PiconManager Pro should not report a successful application when zero picons were actually applied.
