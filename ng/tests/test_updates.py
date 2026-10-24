@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 from unittest.mock import patch
 from PIL import Image
 from PiconManagerNG import updates
@@ -99,3 +100,30 @@ class Transactions(unittest.TestCase):
     def test_broken_png_pixel_stream_rejected(self):
         with self.assertRaises(ValueError):
             updates.verify_png(self.png[:-20])
+
+    def test_prepared_png_is_not_downloaded_again(self):
+        first = self.stage()
+        (first / 'new' / NAME).unlink()  # require the persistent PNG cache, not the old preview
+        fetch = Mock(side_effect=AssertionError('repeat download'))
+        second = Path(updates.stage_plan([self.entry], self.root, self.backups, fetch=fetch))
+        self.assertEqual((second / 'new' / NAME).read_bytes(), self.png)
+        fetch.assert_not_called()
+
+    def test_previous_version_staged_png_is_reusable_without_download(self):
+        first = self.stage()
+        cached = Path(self.tmp.name) / 'cache' / 'picons' / (self.entry['sha256'] + '.png')
+        cached.unlink()
+        fetch = Mock(side_effect=AssertionError('repeat download'))
+        second = Path(updates.stage_plan([self.entry], self.root, self.backups, fetch=fetch))
+        self.assertEqual((second / 'new' / NAME).read_bytes(), (first / 'new' / NAME).read_bytes())
+        fetch.assert_not_called()
+
+    def test_corrupt_cached_png_is_refetched_and_verified(self):
+        first = self.stage()
+        (first / 'new' / NAME).unlink()
+        cached = Path(self.tmp.name) / 'cache' / 'picons' / (self.entry['sha256'] + '.png')
+        cached.write_bytes(b'corrupt')
+        fetch = Mock(return_value=self.png)
+        updates.stage_plan([self.entry], self.root, self.backups, fetch=fetch)
+        self.assertEqual(cached.read_bytes(), self.png)
+        fetch.assert_called_once()

@@ -127,3 +127,37 @@ An installable `2.0.0-r0` IPK is produced under `dist/`, together with its SHA-2
 and `release.json`. Its status is deliberately `hardware-validation-required`.
 It installs only into the PiconManagerNG plugin directory and contains no
 maintainer scripts, automatic plugin removal or automatic restart.
+
+## User-requested simplification and persistent offline data
+
+The user requested removal of startup scans and repeated downloads, and a simpler
+menu. The revised home has three choices: Mes picons / Mettre à jour / Réglages.
+Channel scan is a deliberate Settings action. Startup reads a small persistent
+summary; the full inventory is loaded lazily in a worker when browsing picons.
+Empty/corrupt cache and changed preferences never silently trigger an analysis.
+Download staging reuses SHA-256-verified cached PNGs or previous prepared files;
+LyngSat previews and existing catalogue indexes reopen without repeat HTTP.
+
+44 tests passed locally and on the receiver (Python 3.14.7, 2.35 s). These include
+reopening twice with scan/HTTP calls forbidden, reopening the local channel view
+without the original bouquet file, persisted empty inventory, cache corruption,
+explicit refresh, settings context changes, repeated source-preview reuse, reuse
+of older staged PNGs, and rejection/refetch of corrupt cached PNGs.
+
+The previous captured inventory was prepared off receiver after rechecking all
+1,677 bouquet files against the original capture. Only installed PNG filenames
+were read from the receiver; no picon images were downloaded or modified.
+The compressed inventory has 107,252 entries and occupies 6,280,419 bytes. NG's
+sources and cache were updated with a backup under `plugin-backups`; no opkg
+reinstall occurred. Summary-only startup measured 6.37 / 4.68 / 4.62 ms, with zero
+service rows loaded and scan/network functions patched to fail on unexpected use.
+The Enigma2 PID remained 4918. The 44-test hardware run also confirmed unchanged
+protected files.
+
+The current IPK is 37,386 bytes, SHA-256
+`f9c18674e0a78819913215d63adc9e962b92c3acc80b2ae2a38d66518df835c5`.
+The user declined activation now: “Pas maintenant, garder Enigma2 en cours”.
+The existing session still uses previously imported code. No restart/reboot or
+forced reload was performed for this correction. The simplified UI awaits a
+future GUI session the user chooses. Style calibration and the earlier stability
+question remain open; the official release is unchanged.

@@ -6,6 +6,16 @@ See [VALIDATION.md](VALIDATION.md) for measured results and remaining release ga
 
 ## Implemented
 
+- Simple home menu: **Mes picons**, **Mettre à jour**, **Réglages**. Backup,
+  manual channel refresh and advanced tools stay inside Settings.
+- No automatic scan or HTTP at startup. Read a small saved summary; lazily load
+  the local channel inventory only when opening Mes picons. A manual refresh is
+  available at Réglages → Actualiser mes chaînes. No scan is silently triggered
+  by an empty cache, changed preferences or a failed network connection.
+- Persist the channel inventory across plugin closes and GUI restarts as a
+  compressed local snapshot. Existing installed PNGs stay available offline.
+  Verified downloads, older staged PNGs and LyngSat previews are reused instead
+  of being downloaded on every visit. Corrupt cached images are rejected.
 - Neo Dark dashboard and paginated channel/installed/missing views, native focus,
   remote navigation and color keys, separate HD and FHD geometries.
 - Workers for scanning, network, downloads and transactions; no GUI-thread HTTP.
@@ -43,6 +53,18 @@ so validation does not implicitly remove the official plugin. Installation still
 requires the user's approval. Data lives in `/var/lib/piconmanager-ng`; legacy
 configuration and state are preserved. Existing configured Enigma2 picon paths
 are read; this plugin does not rewrite Enigma2 settings or bouquets.
+
+The persistent cache is stored under `cache/inventory` and `cache/picons` in
+the NG data directory. Inventory snapshots are specific to the chosen picon path
+and TV/radio preference. Their summary shows when the list was last refreshed.
+Without a saved inventory, the plugin asks for the explicit Settings refresh;
+it never starts a scan merely because a user opens the plugin or a page.
+Catalogue indexes and LyngSat pages remain reusable without time-based automatic
+downloads. **Mettre à jour** explicitly checks GitHub; when offline, compatible
+previously saved metadata remains available, and PNG integrity/style checks still
+apply. A missing or uncalibrated public catalogue is not bypassed by this cache.
+
+Runtime dependencies include `python3-compression` for saved inventory snapshots.
 
 ## Exact Chocholousek style and catalogue generation
 

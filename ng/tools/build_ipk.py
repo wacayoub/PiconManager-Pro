@@ -47,7 +47,7 @@ def build(destination):
              for p in (ROOT / 'ng/source/PiconManagerNG').iterdir() if p.suffix in ('.py', '.txt') or p.name == 'LICENSE'}
     control = ('Package: %s\nVersion: %s\nArchitecture: all\nMaintainer: PiconManager Pro contributors\n'
                'Section: extra\nPriority: optional\nLicense: GPL-3.0-or-later\n'
-               'Depends: enigma2, python3-core, python3-pillow\n'
+               'Depends: enigma2, python3-core, python3-compression, python3-pillow\n'
                'Description: PiconManager NG - Neo Dark, selective verified picons and reversible updates\n') % (PACKAGE, version)
     blob = ar([('debian-binary', b'2.0\n'), ('control.tar.gz', tar_gz({'control': control.encode()})),
                ('data.tar.gz', tar_gz(files))])

@@ -69,19 +69,27 @@ def load_catalog(services, cache_dir, force=False):
     srps, names = _wanted(services)
     fingerprint = hashlib.sha256(json.dumps([sorted(srps), sorted(names)]).encode()).hexdigest()
     cache = Path(cache_dir) / 'catalog.json'
-    if not force and cache.is_file():
+    saved = None
+    if cache.is_file():
         try:
             doc = json.loads(cache.read_text(encoding='utf8'))
-            if doc.get('fingerprint') == fingerprint and time.time() - doc.get('fetched_at', 0) < 86400:
-                return doc
+            if doc.get('fingerprint') == fingerprint:
+                saved = doc
+                if not force:
+                    return saved
         except (OSError, ValueError):
             pass
-    commit = read_json(API + '/commits/master', 512 * 1024)['sha']
-    if not re.fullmatch('[0-9a-f]{40}', commit):
-        raise ValueError('Révision GitHub invalide')
-    doc = {'schema': 1, 'commit': commit, 'fingerprint': fingerprint, 'fetched_at': time.time(),
-           'srp': _stream_index(RAW + commit + '/build-source/srp.index', srps, lambda x: x.upper()),
-           'names': _stream_index(RAW + commit + '/build-source/utf8snp.index', names, name_key)}
+    try:
+        commit = read_json(API + '/commits/master', 512 * 1024)['sha']
+        if not re.fullmatch('[0-9a-f]{40}', commit):
+            raise ValueError('Révision GitHub invalide')
+        doc = {'schema': 1, 'commit': commit, 'fingerprint': fingerprint, 'fetched_at': time.time(),
+               'srp': _stream_index(RAW + commit + '/build-source/srp.index', srps, lambda x: x.upper()),
+               'names': _stream_index(RAW + commit + '/build-source/utf8snp.index', names, name_key)}
+    except Exception:
+        if saved is not None:
+            return dict(saved, offline=True)
+        raise
     atomic_json(cache, doc)
     return doc
 

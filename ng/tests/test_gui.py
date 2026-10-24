@@ -4,6 +4,8 @@ import sys
 import types
 import unittest
 import xml.etree.ElementTree as ET
+import tempfile
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
@@ -116,3 +118,29 @@ class NeoDark(unittest.TestCase):
             panels = [int(n.attrib.get('zPosition', 0)) for n in root if n.tag == 'eLabel']
             for node in root.findall('widget'):
                 self.assertGreater(int(node.attrib['zPosition']), max(panels))
+
+    def test_dashboard_reopens_with_three_choices_without_scan_download_or_large_list_load(self):
+        from PiconManagerNG.runtime import Manager
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bouquets, picons = root / 'bouquets', root / 'picons'
+            bouquets.mkdir(); picons.mkdir()
+            (bouquets/'userbouquet.test.tv').write_text('#SERVICE 4097:0:1:0:0:0:0:0:0:0:http%3a//example/live\n#DESCRIPTION Example\n')
+            def manager(): return Manager(root/'data', bouquets, [str(picons)])
+            manager().scan()
+            with patch.object(self.plugin, 'Manager', manager), \
+                    patch.object(self.plugin, 'getDesktop', lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1280))), \
+                    patch('PiconManagerNG.core.scan_bouquet_files', side_effect=AssertionError('startup scan')), \
+                    patch('PiconManagerNG.network.open_source', side_effect=AssertionError('startup HTTP')):
+                for _ in range(2):
+                    screen = self.plugin.PiconManagerNGScreen(MagicMock())
+                    for callback in screen.onLayoutFinish: callback()
+                    self.assertEqual(screen['menu'].value, ['Mes picons', 'Mettre à jour', 'Réglages'])
+                    self.assertEqual(screen['count_value'].value, '1')
+                    self.assertEqual(screen.manager.services, [])
+                    self.assertFalse(screen.busy)
+                    self.assertNotIn(screen.scan, screen['keys'].actions.values())
+                    screen.work = lambda task, done: done(task())
+                    screen.select()  # Mes picons reuses the saved local inventory
+                    self.assertEqual(screen.manager.services[0]['name'], 'Example')
+                    screen.session.open.assert_called_once()

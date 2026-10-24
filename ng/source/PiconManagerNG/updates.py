@@ -73,6 +73,7 @@ def plan_replacements(services, picon_dir, manifest, style_id, overwrite=True):
         if old_sha is not None and (not overwrite or old_sha == items[name]['sha256']):
             continue
         plan.append({'name': name, 'url': items[name]['url'], 'sha256': items[name]['sha256'],
+                     'size': items[name].get('size', MAX_PNG),
                      'old_sha256': old_sha, 'action': 'replace' if old_sha else 'new'})
     return plan
 
@@ -103,11 +104,25 @@ def _journal(batch):
     return doc
 
 
-def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensions=(400, 240)):
-    """Downloads only selected files; leaves destination completely untouched."""
+def _verified_cached(path, sha256, dimensions):
+    try:
+        if path.is_symlink() or path.stat().st_size > MAX_PNG:
+            return None
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != sha256:
+            return None
+        verify_png(data, dimensions)
+        return data
+    except (OSError, ValueError):
+        return None
+
+
+def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensions=(400, 240), cache_dir=None):
+    """Reuse verified local PNGs before downloading selected changes."""
     root = Path(picon_dir).resolve()
     backups = Path(backup_root)
-    for pending in list_backups(backups):
+    previous = list_backups(backups)
+    for pending in previous:
         if pending['state'] in ('applying', 'restoring') and Path(pending['root']).resolve() == root:
             raise ValueError('Une opération interrompue doit être restaurée depuis Sauvegardes avant une nouvelle mise à jour.')
     batch = backups / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:12])
@@ -115,13 +130,24 @@ def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
         raise ValueError('Aucun picon sélectionné')
     if len({p['name'] for p in plan}) != len(plan):
         raise ValueError('Picons en double')
-    required = len(plan) * MAX_PNG * 2 + 1024 * 1024
+    required = MAX_PNG + sum(2 * (p['size'] if isinstance(p.get('size'), int) and 0 < p['size'] <= MAX_PNG else MAX_PNG)
+                            + ((root / p['name']).stat().st_size if valid_filename(p['name']) and (root / p['name']).is_file() else 0)
+                            for p in plan)
     backups.mkdir(parents=True, exist_ok=True)
     if shutil.disk_usage(backups).free < required:
         raise OSError('Espace insuffisant pour téléchargement et sauvegarde')
     batch.mkdir()
     (batch / 'new').mkdir()
     entries = []
+    cache = Path(cache_dir) if cache_dir is not None else backups.parent / 'cache' / 'picons'
+    # Pre-existing staged downloads from earlier NG builds are also reusable.
+    old_downloads = {}
+    needed = {p.get('sha256') for p in plan}
+    for item in previous:
+        folder = Path(item['path'])
+        for entry in _journal(folder)['entries']:
+            if entry['sha256'] in needed:
+                old_downloads.setdefault(entry['sha256'], []).append(folder / 'new' / entry['name'])
     try:
         for item in plan:
             name = item['name']
@@ -131,10 +157,20 @@ def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
             old_sha = digest(root / name)
             if 'old_sha256' in item and old_sha != item['old_sha256']:
                 raise ValueError('Picon modifié depuis l’analyse : ' + name)
-            data = fetch(item['url'])
+            cached = cache / (item['sha256'] + '.png')
+            data = _verified_cached(cached, item['sha256'], expected_dimensions)
+            if data is None:
+                for prior in old_downloads.get(item['sha256'], []):
+                    data = _verified_cached(prior, item['sha256'], expected_dimensions)
+                    if data is not None:
+                        break
+            if data is None:
+                data = fetch(item['url'])
             verify_png(data, expected_dimensions)
             if hashlib.sha256(data).hexdigest() != item['sha256']:
                 raise ValueError('SHA256 incorrect : ' + name)
+            if _verified_cached(cached, item['sha256'], expected_dimensions) is None:
+                atomic_bytes(cached, data)
             atomic_bytes(batch / 'new' / name, data)
             entries.append(dict(item, old_sha256=old_sha))
         atomic_json(batch / 'transaction.json', {'schema': 2, 'state': 'staged', 'root': str(root),

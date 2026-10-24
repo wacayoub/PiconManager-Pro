@@ -13,9 +13,7 @@ from .runtime import Manager, VERSION
 from .gui import Worker, Browser
 from . import updates
 
-ENTRIES = ('Mes chaînes et picons', 'Picons manquants', 'Mises à jour GitHub',
-           'Sources et correspondances', 'LyngSat Logo', 'Style Chocholousek',
-           'Sauvegardes et restauration', 'Réglages', 'Diagnostic et version')
+ENTRIES = ('Mes picons', 'Mettre à jour', 'Réglages')
 
 def neo_dark_skin(desktop_width):
     """Use the active Enigma2 desktop geometry (HD and FHD skins)."""
@@ -41,8 +39,8 @@ def neo_dark_skin(desktop_width):
         pane(800, 128, 435, 6, '#8367EB') +
         widget('title', 46, 33, 730, 57, 43, '#080D18') +
         widget('subtitle', 49, 93, 680, 33, 20, '#080D18', '#9CAECB') +
-        widget('menu', 80, 165, 648, 398, 24, '#111B2C', '#F1F5FE',
-               'itemHeight="%d" foregroundColorSelected="#FFFFFF" backgroundColorSelected="#244461" enableWrapAround="1"' % scaled(42)) +
+        widget('menu', 80, 180, 648, 360, 30, '#111B2C', '#F1F5FE',
+               'itemHeight="%d" foregroundColorSelected="#FFFFFF" backgroundColorSelected="#244461" enableWrapAround="1"' % scaled(100)) +
         widget('info_title', 830, 165, 365, 47, 28, '#111B2C') +
         widget('count_title', 830, 232, 365, 33, 22, '#111B2C', '#9CAECB') +
         widget('count_value', 830, 273, 365, 72, 48, '#111B2C', '#FFFFFF') +
@@ -59,31 +57,36 @@ class PiconManagerNGScreen(Screen, Worker):
         Screen.__init__(self, session)
         self.manager = Manager()
         self['title'] = Label('PiconManager NG')
-        self['subtitle'] = Label('NEO DARK  •  SAT + IPTV  •  ' + VERSION)
+        self['subtitle'] = Label('Vos picons, simplement')
         self['menu'] = MenuList(list(ENTRIES))
         self['info_title'] = Label('Mes chaînes')
-        self['count_title'] = Label('Chaînes détectées')
+        self['count_title'] = Label('Chaînes mémorisées')
         self['count_value'] = Label('—')
-        self['available_title'] = Label('Picons disponibles')
+        self['available_title'] = Label('Picons installés')
         self['available_value'] = Label('—')
-        self['status'] = Label('Prêt à analyser')
-        self['footer'] = Label('OK Ouvrir   VERT Analyser   JAUNE Manquants   BLEU Réglages   ROUGE Quitter')
+        self['status'] = Label('Disponible hors connexion')
+        self['footer'] = Label('OK Ouvrir   VERT Mettre à jour   BLEU Réglages   ROUGE Quitter')
         self['keys'] = ActionMap(['OkCancelActions', 'ColorActions', 'MenuActions', 'DirectionActions'],
-            {'ok': self.select, 'cancel': self.leave, 'red': self.leave, 'green': self.scan,
-             'yellow': lambda: self.channels(True), 'blue': self.settings, 'menu': self.settings,
+            {'ok': self.select, 'cancel': self.leave, 'red': self.leave, 'green': self.check_updates,
+             'blue': self.settings, 'menu': self.settings,
              'up': self['menu'].up, 'down': self['menu'].down,
              'left': self['menu'].pageUp, 'right': self['menu'].pageDown}, -1)
         self.setup_worker()
-        self.onLayoutFinish.append(self.scan)
+        self.onLayoutFinish.append(self.refresh_counts)
 
     def info(self, text):
         self.session.open(MessageBox, text, MessageBox.TYPE_INFO)
 
     def refresh_counts(self, _=None):
         c = self.manager.counts
-        self['count_value'].setText(str(c.get('total', 0)))
-        self['available_value'].setText(str(c.get('found', 0)))
-        self['status'].setText('%d manquants • %d sans identité' % (c.get('missing', 0), c.get('unsupported', 0)))
+        self['count_value'].setText(str(c['total']) if 'total' in c else '—')
+        self['available_value'].setText(str(c['found']) if 'found' in c else '—')
+        if self.manager.snapshot:
+            import time
+            date = time.strftime('%d/%m à %H:%M', time.localtime(self.manager.snapshot['created_at']))
+            self['status'].setText('Mémorisé le %s\n%d picons manquants' % (date, c.get('missing', 0)))
+        else:
+            self['status'].setText('Première utilisation :\nRéglages → Actualiser mes chaînes')
 
     def scan(self):
         self.work(lambda: self.manager.scan(self.progress), self.refresh_counts)
@@ -92,13 +95,15 @@ class PiconManagerNGScreen(Screen, Worker):
         if self.busy:
             return
         index = self['menu'].getSelectedIndex()
-        actions = [lambda: self.channels(False), lambda: self.channels(True), self.check_updates,
-                   self.sources, self.lyngsat, self.style, self.backups, self.settings, self.diagnostics]
+        actions = [self.channels, self.check_updates, self.settings]
         if 0 <= index < len(actions):
             actions[index]()
 
     def channels(self, missing=False):
         if self.busy:
+            return
+        if not self.manager.inventory_loaded:
+            self.work(self.manager.load_inventory, lambda _: self.channels(missing))
             return
         mode = {'value': 2 if missing else 0}
         def filtered():
@@ -117,7 +122,7 @@ class PiconManagerNGScreen(Screen, Worker):
             s = row[1]
             choices = s.get('match', {}).get('candidates', [])
             if not choices:
-                self.info('Consultez les sources pour rechercher les correspondances GitHub.')
+                self.info('Les correspondances sont accessibles dans Réglages → Plus d’options → Sources.')
                 return
             def selected(value):
                 if value:
@@ -130,7 +135,7 @@ class PiconManagerNGScreen(Screen, Worker):
             view.items, view.page = filtered(), 0
             view['title'].setText(('Mes chaînes', 'Picons présents', 'Picons manquants')[mode['value']])
             view.refresh()
-        self.session.open(Browser, 'Picons manquants' if missing else 'Mes chaînes et picons', rows,
+        self.session.open(Browser, 'Picons manquants' if missing else 'Mes picons', rows,
                           detail=detail, yellow=choose, blue=filter_rows,
                           footer='←→ Pages   BLEU Filtrer   JAUNE Correspondance   ROUGE Retour')
 
@@ -156,31 +161,10 @@ class PiconManagerNGScreen(Screen, Worker):
                 if not row:
                     return
                 service, matches = row[1]
-                def download():
-                    import hashlib
-                    from .network import read_source
-                    from .storage import atomic_bytes
-                    blob = read_source(matches[0]['url'], updates.MAX_PNG)
-                    # View source PNGs; never restyle/rasterize SVG on the receiver.
-                    from PIL import Image
-                    import io
-                    with Image.open(io.BytesIO(blob)) as image:
-                        if image.format not in ('PNG', 'WEBP') or max(image.size) > 4096:
-                            raise ValueError('Source à préparer hors récepteur avant aperçu')
-                        image.load()
-                        from PIL import ImageOps
-                        fitted = ImageOps.contain(image.convert('RGBA'), (400, 240))
-                        canvas = Image.new('RGBA', (400, 240), (0, 0, 0, 0))
-                        canvas.alpha_composite(fitted, ((400-fitted.width)//2, (240-fitted.height)//2))
-                        dest = self.manager.data / 'cache' / ('lyngsat-preview-' + hashlib.sha256(blob).hexdigest()[:16] + '.png')
-                        output = io.BytesIO()
-                        canvas.save(output, format='PNG')
-                    atomic_bytes(dest, output.getvalue())
-                    return dest
                 def ready(path):
                     view.detail_callback = lambda r: detail(r) if r != row else (service['name'] + '\nSource LyngSat • style non appliqué', service.get('installed'), path)
                     view.focus()
-                view.work(download, ready)
+                view.work(lambda: self.manager.lyngsat_preview(matches[0]), ready)
             self.session.open(Browser, 'LyngSat Logo · %d indexés · %d pages indisponibles' %
                               (result['indexed'], len(result['failed_letters'])), rows, detail=detail, green=preview,
                               footer='VERT Aperçu source   ←→ Pages   ROUGE Retour')
@@ -194,6 +178,8 @@ class PiconManagerNGScreen(Screen, Worker):
         self.work(self.manager.capture_profile, done)
 
     def check_updates(self):
+        if self.busy:
+            return
         def done(plan):
             if not plan:
                 self.info('Aucune mise à jour vérifiée pour les chaînes et le profil actuels.')
@@ -210,7 +196,8 @@ class PiconManagerNGScreen(Screen, Worker):
                 def ready(batch):
                     self.preview(batch, selected)
                 view.work(lambda: self.manager.stage(selected), ready)
-            self.session.open(Browser, 'Mises à jour disponibles', rows, selectable=True, green=prepare,
+            title = 'Mises à jour mémorisées' if self.manager.offline_update else 'Mises à jour disponibles'
+            self.session.open(Browser, title, rows, selectable=True, green=prepare,
                 detail=lambda row: (row[1]['action'] + '\n' + row[1]['name'], str(self.manager.target / row[1]['name']), None),
                 footer='OK Sélectionner   JAUNE Tout/aucun   VERT Préparer   ←→ Pages   ROUGE Retour')
         self.work(self.manager.check_updates, done)
@@ -247,7 +234,7 @@ class PiconManagerNGScreen(Screen, Worker):
                     if value:
                         def task():
                             updates.restore_backup(item['path'], self.manager.target)
-                            return self.manager.scan()
+                            return self.manager.refresh_installed()
                         def ready(value):
                             item['state'] = 'restored'
                             self.refresh_counts()
@@ -260,6 +247,26 @@ class PiconManagerNGScreen(Screen, Worker):
         self.work(lambda: updates.list_backups(self.manager.backups), done)
 
     def settings(self):
+        if self.busy:
+            return
+        choices = [('Préférences', self.preferences), ('Actualiser mes chaînes', self.scan),
+                   ('Sauvegardes', self.backups), ('Plus d’options', self.more_options)]
+        def chosen(value):
+            if value:
+                value[1]()
+        self.session.openWithCallback(chosen, ChoiceBox, title='Réglages', list=choices)
+
+    def more_options(self):
+        if self.busy:
+            return
+        choices = [('Sources', self.sources), ('LyngSat Logo', self.lyngsat),
+                   ('Style Chocholousek', self.style), ('Diagnostic et version', self.diagnostics)]
+        def chosen(value):
+            if value:
+                value[1]()
+        self.session.openWithCallback(chosen, ChoiceBox, title='Plus d’options', list=choices)
+
+    def preferences(self):
         if self.busy:
             return
         s = self.manager.settings
@@ -275,14 +282,14 @@ class PiconManagerNGScreen(Screen, Worker):
                     if choice:
                         s['picon_dir'] = choice[1]
                         self.manager.save_settings()
-                        self.scan()
+                        self.refresh_counts()
                 self.session.openWithCallback(set_path, ChoiceBox, title='Dossier de picons',
                                               list=[(p, p) for p in self.manager.paths])
             else:
                 setting = 'include_radio' if key == 'radio' else 'overwrite'
                 s[setting] = not s[setting]
                 self.manager.save_settings()
-                self.scan()
+                self.refresh_counts()
         self.session.openWithCallback(changed, ChoiceBox, title='Réglages', list=options)
 
     def diagnostics(self):

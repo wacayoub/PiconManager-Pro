@@ -64,3 +64,34 @@ GUI geometry/component tests are not real HD/FHD Metrix display tests.
 Exact rendering calibration is still unproven, so no styled public PNG catalogue
 has been generated or claimed. Do not bypass this gate or label the release final.
 All receiver addresses, credentials, original images and bouquet data stay local.
+
+## User correction — simple menu, no startup analysis
+
+The user rejected the earlier workflow and explicitly requested no scan at each
+plugin entry, no repeated downloads, and only necessary home-menu options. This
+takes precedence over the earlier nine-entry dashboard design.
+
+The home menu now has exactly **Mes picons / Mettre à jour / Réglages**. Manual
+scan is available only through Réglages → Actualiser mes chaînes. Settings also
+contains preferences, backups and a separate advanced-tools submenu preserving
+LyngSat, source matching, profile and diagnostic functions.
+
+Manager startup reads only the persistent summary, not bouquets or the full
+inventory. Mes picons loads the local compressed inventory in a worker, without
+scan/HTTP. Do not reintroduce implicit scans on empty cache or preference changes.
+Downloaded PNGs, previous staged files and LyngSat previews are reused locally.
+Explicit update checks can refresh GitHub; offline metadata fallback stays subject
+to the original style and integrity gates.
+
+44 tests pass locally and on Python 3.14.7 on the receiver. NG sources were updated
+in place with a source backup; no package reinstall was run. The previous captured
+inventory was rebuilt off receiver after verifying all 1,677 bouquets still match,
+then saved in NG's cache. It contains 107,252 services. Summary-only initialization
+measured 6.37 / 4.68 / 4.62 ms, with zero service rows loaded, and scan/network
+functions patched to reject unexpected calls. The receiver PID stayed 4918.
+
+The user explicitly answered **“Pas maintenant, garder Enigma2 en cours”** when
+asked to activate the corrected UI. Do not restart/reboot/reinstall or attempt to
+force a live reload. The running Enigma2 session still has the earlier modules;
+the corrected menu will load in a later GUI session chosen by the user. Live
+visual verification of this simplified menu is pending that activation.

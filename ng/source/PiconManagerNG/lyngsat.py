@@ -206,7 +206,7 @@ def lookup_services(services, cache_dir, force=False):
     for letter in letters:
         page = 'https://www.lyngsat.com/logo/tvchannel/' + letter + '.html'
         prior = state['letters'].get(letter, {})
-        if force or time.time() - prior.get('at', 0) > 7 * 86400:
+        if force or not prior.get('entries'):
             try:
                 html = read_source(page).decode('utf8', 'replace')
                 parsed = _lyngsat_parse_page(html, page)
