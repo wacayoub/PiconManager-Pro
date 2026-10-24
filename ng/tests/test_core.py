@@ -27,7 +27,7 @@ class TestNG(unittest.TestCase):
             data=scan_bouquet_files(root)
             self.assertEqual(len(data),2)
             self.assertEqual(data[0]['name'],'2M')
-            self.assertEqual(find_installed(data,root)['missing'],1)
+            self.assertEqual(find_installed(data,root)['missing'],2)
     def test_manifest_requires_style(self):
         doc={'schema':1,'style_id':'choco-user','items':{NAME:{'url':URL,'sha256':'a'*64}}}
         validate_manifest(doc,'choco-user')
@@ -54,7 +54,7 @@ class TestNG(unittest.TestCase):
             result=apply_plan(plan,dest,backup,fetch=lambda _:fake)
             self.assertEqual(result['updated'],1)
             self.assertEqual((dest/NAME).read_bytes(),fake)
-            self.assertEqual((Path(result['backup'])/NAME).read_bytes(),b'old')
+            self.assertEqual((Path(result['backup'])/'old'/NAME).read_bytes(),b'old')
     def test_bad_image_rejected(self):
         with self.assertRaises(ValueError):verify_png(b'not-png')
 

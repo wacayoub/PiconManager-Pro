@@ -1,0 +1,6 @@
+{
+  "upstream_commit": "REPLACE_WITH_VERIFIED_FULL_COMMIT_SHA",
+  "calibration": {},
+  "logos": {},
+  "note": "Explicit upstream source paths, selected off receiver. Do not include bouquets, provider URLs or receiver credentials."
+}

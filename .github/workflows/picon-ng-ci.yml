@@ -14,13 +14,24 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.14']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
+      - name: Install PNG validation dependency
+        run: python -m pip install 'Pillow>=12,<13'
       - name: Compile and test (no receiver/network writes)
         run: |
           python -m compileall -q ng/source
           cd ng
           PYTHONPATH=source python -m unittest discover -s tests -v
+      - name: Build and validate deterministic IPK
+        run: python ng/tools/build_ipk.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piconmanager-ng-python-${{ matrix.python-version }}
+          path: dist/*

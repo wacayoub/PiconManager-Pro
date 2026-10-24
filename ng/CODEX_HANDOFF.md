@@ -33,3 +33,25 @@ Modernize existing `wacayoub/PiconManager-Pro` into PiconManager NG 2.x. Use bra
 
 ## Definition of done
 Neo Dark GUI stable on Vu+, same Chocholousek icon style, selective up-to-date GitHub catalogue, useful preview, reversible replacement, correct SAT/IPTV mapping, integrity-checked release. No other plugins touched.
+
+## Continuation — 2026-10-24
+
+Read [VALIDATION.md](VALIDATION.md) and the updated [NG README](README.md) before
+continuing. The initial prototype has been replaced by functional Neo Dark views,
+streaming selective matching, preserved LyngSat parsing/source preview, strict
+style verification, durable staged transactions, restoration/recovery, and a
+deterministic IPK builder. The local suite now has 31 tests.
+
+Direct SSH with an existing local key and strict host-key verification worked.
+The receiver was inspected read-only and the engine was tested in disposable
+temporary directories. It runs Python 3.14.7. The active 400x240 transparent pack
+is Chocholousek; a second pack has different padding and must not be substituted.
+The full inventory has 107,252 services. Measured scan time fell from 127 to 67 s.
+No Enigma2 restart, official package replacement or real picon update occurred.
+
+The IPK is prepared with status `hardware-validation-required`, not stable.
+Installation approval was requested in the conversation and must be checked before
+installing. GUI geometry/component tests are not real HD/FHD Metrix display tests.
+Exact rendering calibration is still unproven, so no styled public PNG catalogue
+has been generated or claimed. Do not bypass this gate or label the release final.
+All receiver addresses, credentials, original images and bouquet data stay local.

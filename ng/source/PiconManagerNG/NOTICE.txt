@@ -1,0 +1,15 @@
+PiconManager NG code: GNU General Public License version 3 or later.
+Copyright PiconManager Pro contributors.
+LyngSat HTML parser is preserved from PiconManager Pro 1.5.1 (GPL-3.0-or-later).
+
+Source: https://github.com/wacayoub/PiconManager-Pro
+Full GNU GPL v3: https://www.gnu.org/licenses/gpl-3.0.html
+
+picons/picons is an independent GPL-3.0 project:
+https://github.com/picons/picons
+https://github.com/picons/picons/blob/master/LICENSE
+Its indexes and artwork retain upstream attribution and trademark rights.
+
+Chocholousek original picons are not bundled or redistributed by this package.
+They retain their original author's copyright and metadata.
+LyngSat source artwork is not bundled or relicensed; requests retain source URLs.
