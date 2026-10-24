@@ -78,6 +78,7 @@ class Manager:
         # Inventory describes the chosen destination; alternative packs cannot hide missing files.
         self.counts = core.find_installed(self.services, self.target)
         self.counts.update(Counter(s['kind'] for s in self.services))
+        self.catalog = None
         self.plan, self.staged = [], None
         return self.counts
 

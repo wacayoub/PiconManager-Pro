@@ -73,13 +73,33 @@ the corrected dashboard was opened and visually inspected at 1920x1080 under
 Metrix. Labels, nine menu entries, selection focus and footer were visible.
 This confirms the FHD dashboard rendering, not all sub-menu interactions.
 The receiver subsequently stopped responding to SSH (connection timeout), which
-interrupted the remaining live checks. No second restart was requested or run.
+interrupted the remaining live checks. SSH returned, but `/proc/uptime` then
+showed a full receiver reboot (about two minutes uptime, Enigma2 PID 1964).
+Only one GUI-restart API request was sent by this task; no full-reboot command or
+second restart was sent. The cause of the full reboot is unconfirmed. Current
+kernel logs contain no preserved explanation and there is no new Enigma2 crash
+log. The user was asked whether they restarted the receiver themselves. Treat
+stability as unresolved until that is clarified and the remaining live checks
+can safely resume. All 1,677 captured bouquet files still match the original
+read-only inventory after reconnection (zero changed or missing).
 
 The rebuilt corrected IPK is 34,966 bytes, SHA-256
 `f14a5dddb363cad3bda580ce8ad983e252791b6c736274c4258ae8318a6c967a`.
 It remains `hardware-validation-required`. Its functional engine is unchanged
 from the receiver-tested package; the display-layer regression passed locally
 and the corrected installed dashboard was observed live.
+
+A final cache-invalidation fix clears stale catalogue state on rescan so the next
+update plan rematches the newly scanned services. Its regression test brings the
+suite to 33 tests. The latest IPK (including this fix and the layer correction)
+is 34,968 bytes, SHA-256
+`07ee2b6105220ba5d07cb7a22e1736f4df06c8bfd34c86bd45fef3ee30463cf7`.
+All 33 tests passed on the receiver with this exact latest IPK (1.80 s), including
+package decoding/metadata/scope validation and compilation with Python 3.14.7.
+Protected-file comparison was identical. NG's corrected runtime source was
+aligned on disk with a backup; no additional package installation or restart was
+performed. An already imported module will use the new cache behavior only after
+the next normal GUI session; no further GUI restart is authorized by this record.
 
 A direct LyngSat page test returned 40 parsed entries. A sample render from the
 pinned GitHub `ckat.default.png` did **not** reproduce the original Chocholousek

@@ -55,8 +55,10 @@ dashboard layer defect was corrected in NG's own plugin.py with a backup; no
 package reinstall occurred. A separate single GUI restart was explicitly approved
 and completed, and the corrected FHD dashboard was visually inspected under
 Metrix. The receiver then stopped responding to SSH, interrupting further live
-checks. Do not repeat the restart without new approval. The local suite now has
-32 tests; 31 engine/package tests previously passed on the receiver. See the full
+checks. SSH returned with evidence of a full receiver reboot; its cause is not
+established. A question to the user about external intervention is pending. Do not
+repeat the restart without new approval. The suite now has 33 tests, all passed
+on the receiver with the latest IPK. See the full
 validation record for the approved and corrected package checksums.
 GUI geometry/component tests are not real HD/FHD Metrix display tests.
 Exact rendering calibration is still unproven, so no styled public PNG catalogue
