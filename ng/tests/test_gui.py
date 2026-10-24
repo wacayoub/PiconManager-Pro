@@ -109,3 +109,10 @@ class NeoDark(unittest.TestCase):
             self.assertEqual(view.row()[1], 2)
             view['keys'].actions['up']()
             self.assertEqual(view.row()[1], 1)
+
+    def test_dashboard_widgets_are_above_decorative_panels(self):
+        for width in (1280, 1920):
+            root = ET.fromstring(self.plugin.neo_dark_skin(width))
+            panels = [int(n.attrib.get('zPosition', 0)) for n in root if n.tag == 'eLabel']
+            for node in root.findall('widget'):
+                self.assertGreater(int(node.attrib['zPosition']), max(panels))

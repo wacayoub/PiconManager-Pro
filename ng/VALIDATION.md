@@ -39,7 +39,7 @@ Protected-file comparison included bouquets, Enigma2 settings and IPToSatPro /
 EPGManager files. No commands were issued to modify these areas. Tests of writes,
 rollback and interruption recovery used temporary synthetic picons only.
 
-The final local suite has 31 passing tests. Coverage includes IPTV/private refs,
+The initial final-package local suite had 31 passing tests. Coverage includes IPTV/private refs,
 lamedb names, reachable bouquets, ambiguity/manual choices, LyngSat split cells,
 HD/FHD widget bounds and keyboard navigation, pagination with 100,000 rows,
 PNG/checksum failures, stale previews, new-file removal on undo, corrupt backups,
@@ -52,13 +52,48 @@ sources compiled with the receiver's Python 3.14.7. Its size is 34,968 bytes and
 SHA-256 is `7248a4e8408e0ebfa31c77f0290ae9e6811c608888be8ea6a81e9b3e630a9c9e`.
 Protected files were identical before/after this final temporary-directory run.
 
+## Approved installation and live display check
+
+The user subsequently approved installation of the exact 34,968-byte IPK above.
+`opkg --noaction` offered only NG, and installation completed successfully.
+Enigma2 PID was identical immediately before/after installation. Protected files
+were identical. No real picon update was performed.
+
+The plugin list was refreshed through the existing local OpenWebif interface,
+and NG was opened with the receiver's remote-control API. This exposed a real
+dashboard layering defect: decorative labels covered the text widgets. The fix
+sets explicit widget/panel z positions and removes a redundant fullscreen label.
+A regression test was added; the local suite now has **32 passing tests**.
+Only NG's `plugin.py` was corrected on the receiver, with its approved original
+saved under NG's plugin-backups directory. No package reinstallation was run.
+
+The user separately approved **one** Enigma2 GUI restart to load the corrected
+module. No recording was active. The process changed from PID 850 to 1741, and
+the corrected dashboard was opened and visually inspected at 1920x1080 under
+Metrix. Labels, nine menu entries, selection focus and footer were visible.
+This confirms the FHD dashboard rendering, not all sub-menu interactions.
+The receiver subsequently stopped responding to SSH (connection timeout), which
+interrupted the remaining live checks. No second restart was requested or run.
+
+The rebuilt corrected IPK is 34,966 bytes, SHA-256
+`f14a5dddb363cad3bda580ce8ad983e252791b6c736274c4258ae8318a6c967a`.
+It remains `hardware-validation-required`. Its functional engine is unchanged
+from the receiver-tested package; the display-layer regression passed locally
+and the corrected installed dashboard was observed live.
+
+A direct LyngSat page test returned 40 parsed entries. A sample render from the
+pinned GitHub `ckat.default.png` did **not** reproduce the original Chocholousek
+pixels: original alpha bounds `(8, 68, 391, 171)`, candidate `(8, 70, 392, 169)`.
+The example recipe therefore remains unverified and no styled catalogue was
+published or applied. Matching canvas dimensions alone is insufficient.
+
 ## Remaining release gates
 
-- Installation approval, followed by a real Enigma2 session: remote navigation,
+- Resume the interrupted real Enigma2 session: remote navigation,
   focus, color keys, preview rendering, back navigation, and opening/closing all
   screens. GUI contract tests do **not** constitute a real Metrix screen test.
-- Live HD and FHD display checks; no skin/resolution change or GUI restart has
-  been performed by this task.
+- Live HD and remaining FHD sub-screen checks. The corrected FHD dashboard was
+  inspected; no skin/resolution change was performed.
 - Complete and prove the exact Chocholousek rendering recipe against original
   samples. Dimensions/transparency alone do not prove identical styling.
 - Generate and host the selected GPL-attributed PNG catalogue only after that

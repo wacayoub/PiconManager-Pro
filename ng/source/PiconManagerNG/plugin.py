@@ -28,14 +28,13 @@ def neo_dark_skin(desktop_width):
     def widget(name, x, y, w, h, font=29, bg='#111B2C', fg='#F1F5FE', extra=''):
         pos, size = rect(x, y, w, h)
         return ('<widget name="%s" position="%s" size="%s" font="Regular;%d" '
-                'foregroundColor="%s" backgroundColor="%s" %s />' %
+                'foregroundColor="%s" backgroundColor="%s" zPosition="2" %s />' %
                 (name, pos, size, scaled(font), fg, bg, extra))
     def pane(x, y, w, h, color):
         pos, size = rect(x, y, w, h)
-        return '<eLabel position="%s" size="%s" backgroundColor="%s" />' % (pos, size, color)
+        return '<eLabel position="%s" size="%s" backgroundColor="%s" zPosition="0" />' % (pos, size, color)
     return ('''<screen name="PiconManagerNGScreen" position="center,center" size="%d,%d"
         title="PiconManager NG" backgroundColor="#080D18" flags="wfNoBorder">''' % (width, height) +
-        pane(0, 0, 1280, 720, '#080D18') +
         pane(44, 128, 726, 477, '#111B2C') +
         pane(44, 128, 6, 477, '#24C7F5') +
         pane(800, 128, 435, 477, '#111B2C') +

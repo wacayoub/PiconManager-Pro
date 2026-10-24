@@ -50,8 +50,15 @@ The full inventory has 107,252 services. Measured scan time fell from 127 to 67 
 No Enigma2 restart, official package replacement or real picon update occurred.
 
 The IPK is prepared with status `hardware-validation-required`, not stable.
-Installation approval was requested in the conversation and must be checked before
-installing. GUI geometry/component tests are not real HD/FHD Metrix display tests.
+Installation was explicitly approved and succeeded without restart. A discovered
+dashboard layer defect was corrected in NG's own plugin.py with a backup; no
+package reinstall occurred. A separate single GUI restart was explicitly approved
+and completed, and the corrected FHD dashboard was visually inspected under
+Metrix. The receiver then stopped responding to SSH, interrupting further live
+checks. Do not repeat the restart without new approval. The local suite now has
+32 tests; 31 engine/package tests previously passed on the receiver. See the full
+validation record for the approved and corrected package checksums.
+GUI geometry/component tests are not real HD/FHD Metrix display tests.
 Exact rendering calibration is still unproven, so no styled public PNG catalogue
 has been generated or claimed. Do not bypass this gate or label the release final.
 All receiver addresses, credentials, original images and bouquet data stay local.
