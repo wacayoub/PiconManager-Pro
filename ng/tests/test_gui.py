@@ -37,7 +37,12 @@ class Screen(dict):
         self.session = session
         self.onClose = []
         self.onLayoutFinish = []
-    def close(self): pass
+    def close(self):
+        # Enigma2 Screen.deleteGUIScreen and doClose iterate self.items().
+        for callback in self.onClose: callback()
+        for name, value in list(self.items()):
+            del self[name]
+        self.closed = True
 
 
 def fake_modules():
@@ -142,5 +147,78 @@ class NeoDark(unittest.TestCase):
                     self.assertNotIn(screen.scan, screen['keys'].actions.values())
                     screen.work = lambda task, done: done(task())
                     screen.select()  # Mes picons reuses the saved local inventory
-                    self.assertEqual(screen.manager.services[0]['name'], 'Example')
+                    self.assertEqual(screen.manager.services, [])  # satellite summary is also lazy
                     screen.session.open.assert_called_once()
+
+    def test_satellite_browser_filter_and_multiple_update_selection_stay_local(self):
+        from PiconManagerNG.runtime import Manager
+        from test_groups import service
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = Manager(root/'data', root, [str(root)])
+            app.services = [service(192, installed=str(root/'one.png')), service(192, 2),
+                            service(3530), service(192, kind='IPTV')]
+            app.inventory_loaded = True
+            session = MagicMock()
+            views = []
+            def open_view(cls, *args, **kwargs):
+                if cls is self.gui.Browser:
+                    view = cls(session, *args, **kwargs)
+                    view.work = lambda task, done: done(task())
+                    for callback in view.onLayoutFinish: callback()
+                    views.append(view)
+                    return view
+            session.open.side_effect = open_view
+            with patch.object(self.plugin, 'Manager', return_value=app), \
+                    patch.object(self.plugin, 'getDesktop', lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1280))), \
+                    patch.object(self.gui, 'getDesktop', lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1280))), \
+                    patch('PiconManagerNG.core.scan_bouquet_files', side_effect=AssertionError('unexpected scan')), \
+                    patch('PiconManagerNG.network.open_source', side_effect=AssertionError('unexpected HTTP')):
+                screen = self.plugin.PiconManagerNGScreen(session)
+                screen.work = lambda task, done: done(task())
+                screen.channels()
+                group_view = views[-1]
+                self.assertEqual([r[1]['key'] for r in group_view.entries], ['SAT:192', 'SAT:3530', 'IPTV'])
+                with patch.object(group_view, 'work', wraps=group_view.work) as visible_work:
+                    group_view['keys'].actions['ok']()
+                    visible_work.assert_called_once()
+                channels = views[-1]
+                self.assertEqual(len(channels.entries), 2)
+                channels['keys'].actions['blue']()
+                self.assertEqual(len(channels.entries), 1)
+                self.assertTrue(channels.entries[0][1]['installed'])
+                channels['keys'].actions['blue']()
+                self.assertEqual(len(channels.entries), 1)
+                self.assertIsNone(channels.entries[0][1]['installed'])
+                screen.check_updates()
+                selection = views[-1]
+                selection['keys'].actions['ok']()
+                selection['keys'].actions['down']()
+                selection['keys'].actions['ok']()
+                with patch.object(app, 'check_updates', return_value=[]) as update, \
+                        patch.object(selection, 'work', wraps=selection.work) as visible_work:
+                    selection['keys'].actions['green']()
+                    update.assert_called_once_with(['SAT:192', 'SAT:3530'])
+                    visible_work.assert_called_once()
+                for view in views:
+                    view['keys'].actions['red']()
+                    self.assertTrue(view.closed)
+
+    def test_channel_rows_format_only_the_visible_page(self):
+        services = [{'name': 'Test %d' % i, 'kind': 'IPTV'} for i in range(100000)]
+        rows = self.gui.ChannelRows(services)
+        with patch.object(self.gui.ChannelRows, 'row', wraps=self.gui.ChannelRows.row) as render:
+            self.assertEqual(len(rows), 100000)
+            self.assertEqual(len(rows[:250]), 250)
+            self.assertEqual(render.call_count, 250)
+            self.assertIs(rows[99999][1], services[-1])
+
+    def test_closing_each_browser_preserves_native_screen_items_method(self):
+        with patch.object(self.gui, 'getDesktop', lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1920))):
+            for rows in ([], [('Satellite', 192)], self.gui.ChannelRows([{'name': 'A', 'kind': 'SAT'}])):
+                view = self.gui.Browser(MagicMock(), 'Exit', rows)
+                self.assertTrue(callable(view.items))
+                self.assertIn('rows', dict(view.items()))
+                view.refresh()
+                view['keys'].actions['cancel']()
+                self.assertTrue(view.closed)

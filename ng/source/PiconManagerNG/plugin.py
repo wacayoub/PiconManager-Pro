@@ -10,7 +10,7 @@ from Components.Label import Label
 from Components.MenuList import MenuList
 from enigma import getDesktop
 from .runtime import Manager, VERSION
-from .gui import Worker, Browser
+from .gui import Worker, Browser, ChannelRows
 from . import updates
 
 ENTRIES = ('Mes picons', 'Mettre à jour', 'Réglages')
@@ -99,17 +99,43 @@ class PiconManagerNGScreen(Screen, Worker):
         if 0 <= index < len(actions):
             actions[index]()
 
-    def channels(self, missing=False):
+    def satellites(self, updating=False):
         if self.busy:
             return
-        if not self.manager.inventory_loaded:
-            self.work(self.manager.load_inventory, lambda _: self.channels(missing))
+        def ready(groups):
+            rows = [('%s  ·  %d chaînes' % (g['label'], g['total']), g) for g in groups]
+            def detail(row):
+                g = row[1]
+                return ('%s\n%d présents • %d manquants' % (g['label'], g['found'], g['missing']), None, None)
+            def update(view):
+                chosen = [view.entries[i][1] for i in sorted(view.selected)] if updating else ([view.row()[1]] if view.row() else [])
+                if not chosen:
+                    self.info('Choisissez un satellite ou IPTV avec OK, puis VERT.')
+                    return
+                keys = [g['key'] for g in chosen]
+                title = chosen[0]['label'] if len(chosen) == 1 else '%d groupes' % len(chosen)
+                self.check_updates(keys, title, owner=view)
+            def browse(view):
+                if view.row():
+                    group = view.row()[1]
+                    self.channels(group_keys=[group['key']], title=group['label'], owner=view)
+            footer = ('OK Sélectionner   JAUNE Tout/aucun   VERT Vérifier   ROUGE Retour' if updating else
+                      'OK Voir les picons   VERT Mettre à jour ce groupe   ROUGE Retour')
+            self.session.open(Browser, 'Mettre à jour · Satellites / IPTV' if updating else 'Mes picons · Satellites / IPTV',
+                              rows, detail=detail, ok=browse, green=update, selectable=updating, footer=footer)
+        self.work(self.manager.list_groups, ready)
+
+    def channels(self, missing=False, group_keys=None, title=None, owner=None):
+        if self.busy:
+            return
+        if group_keys is None:
+            self.satellites()
             return
         mode = {'value': 2 if missing else 0}
         def filtered():
-            return [('%s  ·  %s' % (s['name'] or 'Sans nom', s['kind']), s) for s in self.manager.services
-                    if mode['value'] == 0 or bool(s.get('installed')) == (mode['value'] == 1)]
-        rows = filtered()
+            services = self.manager.group_services(group_keys)
+            return ChannelRows([s for s in services
+                                if mode['value'] == 0 or bool(s.get('installed')) == (mode['value'] == 1)])
         def detail(row):
             s = row[1]
             match = s.get('match', {})
@@ -132,12 +158,16 @@ class PiconManagerNGScreen(Screen, Worker):
                                           list=[(x, x) for x in choices])
         def filter_rows(view):
             mode['value'] = (mode['value'] + 1) % 3
-            view.items, view.page = filtered(), 0
-            view['title'].setText(('Mes chaînes', 'Picons présents', 'Picons manquants')[mode['value']])
-            view.refresh()
-        self.session.open(Browser, 'Picons manquants' if missing else 'Mes picons', rows,
-                          detail=detail, yellow=choose, blue=filter_rows,
-                          footer='←→ Pages   BLEU Filtrer   JAUNE Correspondance   ROUGE Retour')
+            def ready(rows):
+                view.entries, view.page = rows, 0
+                view['title'].setText(title + ' · ' + ('Mes picons', 'Présents', 'Manquants')[mode['value']])
+                view.refresh()
+            view.work(filtered, ready)
+        def ready(rows):
+            self.session.open(Browser, title + (' · Manquants' if missing else ' · Mes picons'), rows,
+                              detail=detail, yellow=choose, blue=filter_rows,
+                              footer='←→ Pages   BLEU Filtrer   JAUNE Correspondance   ROUGE Retour')
+        (owner if owner is not None else self).work(filtered, ready)
 
     def sources(self):
         def done(result):
@@ -177,8 +207,11 @@ class PiconManagerNGScreen(Screen, Worker):
                  'oui' if all(s['transparent'] for s in value['samples']) else 'non uniforme', value['style_id']))
         self.work(self.manager.capture_profile, done)
 
-    def check_updates(self):
+    def check_updates(self, group_keys=None, group_title=None, owner=None):
         if self.busy:
+            return
+        if group_keys is None:
+            self.satellites(updating=True)
             return
         def done(plan):
             if not plan:
@@ -189,7 +222,7 @@ class PiconManagerNGScreen(Screen, Worker):
                 p['label'] = names.get(p['name']) or p['name']
             rows = [(('%s · %s' % ('Remplacer' if p['action'] == 'replace' else 'Ajouter', p['label'])), p) for p in plan]
             def prepare(view):
-                selected = [view.items[i][1] for i in sorted(view.selected)]
+                selected = [view.entries[i][1] for i in sorted(view.selected)]
                 if not selected:
                     self.info('Sélectionnez les picons à préparer avec OK ou JAUNE.')
                     return
@@ -197,10 +230,10 @@ class PiconManagerNGScreen(Screen, Worker):
                     self.preview(batch, selected)
                 view.work(lambda: self.manager.stage(selected), ready)
             title = 'Mises à jour mémorisées' if self.manager.offline_update else 'Mises à jour disponibles'
-            self.session.open(Browser, title, rows, selectable=True, green=prepare,
+            self.session.open(Browser, title + ' · ' + group_title, rows, selectable=True, green=prepare,
                 detail=lambda row: (row[1]['action'] + '\n' + row[1]['name'], str(self.manager.target / row[1]['name']), None),
                 footer='OK Sélectionner   JAUNE Tout/aucun   VERT Préparer   ←→ Pages   ROUGE Retour')
-        self.work(self.manager.check_updates, done)
+        (owner if owner is not None else self).work(lambda: self.manager.check_updates(group_keys), done)
 
     def preview(self, batch, entries):
         rows = [(p.get('label', p['name']), p) for p in entries]

@@ -6,7 +6,7 @@ import platform
 import hashlib
 from collections import Counter
 from pathlib import Path
-from . import core, catalog, profile, updates, lyngsat
+from . import core, catalog, profile, updates, lyngsat, groups
 from .network import read_json
 from .storage import atomic_json
 from .cache import InventoryCache
@@ -51,6 +51,7 @@ class Manager:
         self.lyngsat = None
         self.staged = None
         self.inventory_loaded = False
+        self._groups = None
         self._restore_summary()
 
     def _inventory_cache(self):
@@ -69,6 +70,20 @@ class Manager:
             self.counts = dict(self.snapshot['counts'])
             self.inventory_loaded = True
         return self.services
+
+    def list_groups(self):
+        if self._groups is None:
+            self._groups = groups.saved_summary(self.snapshot)
+            if self._groups is None:
+                self._groups = groups.summarize(self.load_inventory())
+            names = groups.satellite_names((self.bouquets / 'satellites.xml', '/etc/tuxbox/satellites.xml'))
+            for group in self._groups:
+                if group['key'].startswith('SAT:') and group['key'] != 'SAT:unknown':
+                    group['label'] = names.get(int(group['key'][4:]), group['label'])
+        return self._groups
+
+    def group_services(self, keys=None):
+        return groups.select(self.load_inventory(), keys)
 
     def _read(self, name, default):
         try:
@@ -91,6 +106,7 @@ class Manager:
         self.plan, self.staged = [], None
         self.services, self.catalog = [], None
         self.inventory_loaded = False
+        self._groups = None
         self._restore_summary()
         if self.settings['picon_dir'] != self._profile_target:
             self.profile = None
@@ -106,6 +122,7 @@ class Manager:
         self.plan, self.staged = [], None
         self.snapshot = self._inventory_cache().save(self.services, self.counts)
         self.inventory_loaded = True
+        self._groups = None
         return self.counts
 
     def refresh_installed(self):
@@ -115,6 +132,7 @@ class Manager:
         self.counts.update(Counter(s['kind'] for s in self.services))
         self.snapshot = self._inventory_cache().save(self.services, self.counts)
         self.plan, self.staged = [], None
+        self._groups = None
         return self.counts
 
     def capture_profile(self):
@@ -124,13 +142,14 @@ class Manager:
         atomic_json(self.data / 'profile.json', self.profile)
         return self.profile
 
-    def sync_catalog(self, force=False):
+    def sync_catalog(self, force=False, services=None):
         self.load_inventory()
-        self.catalog = catalog.load_catalog(self.services, self.data / 'cache', force)
-        for service in self.services:
+        services = self.services if services is None else services
+        self.catalog = catalog.load_catalog(services, self.data / 'cache', force)
+        for service in services:
             service['match'] = catalog.match_service(service, self.catalog, self.aliases)
-        return {'matched': sum(bool(s['match']['logo']) for s in self.services),
-                'ambiguous': sum(s['match']['method'] == 'Ambigu' for s in self.services),
+        return {'matched': sum(bool(s['match']['logo']) for s in services),
+                'ambiguous': sum(s['match']['method'] == 'Ambigu' for s in services),
                 'commit': self.catalog['commit']}
 
     def set_alias(self, service, logo):
@@ -140,9 +159,13 @@ class Manager:
         atomic_json(self.data / 'aliases.json', self.aliases)
         service['match'] = catalog.match_service(service, self.catalog, self.aliases)
 
-    def check_updates(self):
-        self.load_inventory()
-        self.sync_catalog(force=True)
+    def check_updates(self, group_keys=None):
+        services = self.group_services(group_keys)
+        self.plan = []
+        if not services:
+            self.offline_update = False
+            return self.plan
+        self.sync_catalog(force=True, services=services)
         if not self.profile:
             self.capture_profile()
         manifest_key = hashlib.sha256(self.settings['manifest_url'].encode()).hexdigest()
@@ -159,8 +182,8 @@ class Manager:
                 raise RuntimeError('Catalogue de PNG du profil indisponible. Vos picons installés restent disponibles.') from exc
             self.offline_update = True
         profile.validate_style(doc, self.profile)
-        manifest = catalog.materialize_manifest(doc, self.services)
-        self.plan = updates.plan_replacements(self.services, self.target, manifest,
+        manifest = catalog.materialize_manifest(doc, services)
+        self.plan = updates.plan_replacements(services, self.target, manifest,
                                               self.profile['style_id'], self.settings['overwrite'])
         if manifest_downloaded:
             atomic_json(cached, doc)

@@ -161,3 +161,57 @@ The existing session still uses previously imported code. No restart/reboot or
 forced reload was performed for this correction. The simplified UI awaits a
 future GUI session the user chooses. Style calibration and the earlier stability
 question remain open; the official release is unchanged.
+
+## Direct navigation, satellite groups, and native screen exit correction
+
+The user requested direct self-testing and grouping by satellite. The installed
+simplified home was now observed live at 1920×1080 under Metrix. It displayed
+107,252 saved services and 10,999 installed picons. Remote navigation confirmed
+the current picon preview, movement between rows/pages, and the present/missing
+filters (10,999 and 96,253 entries). No scan or download was requested on entry.
+
+Leaving the browser revealed an actual Python error at Screen.deleteGUIScreen:
+`TypeError: 'list' object is not callable`. Inspection of the receiver's compiled
+Screen methods confirmed that destruction calls self.items(). Browser had assigned
+its row list to that same attribute. Row data is now called entries throughout
+the GUI and callbacks. Tests include destruction, not just geometry/navigation.
+Enigma2 automatically recovered during this test (PID 7851 → 8676). No restart or
+reboot command was issued. This new, specific failure does not establish the cause
+of the earlier unexplained full receiver reboot.
+
+The new grouping engine was run in a disposable Python process on the receiver
+against its real saved inventory. It identified 40 satellite positions and a
+separate IPTV group (94,512 services). All per-group totals, found and missing
+counts reconcile with the original inventory. Namespace transponder bits are
+ignored when grouping, and IPTV with borrowed DVB IDs remains IPTV. Original PNG
+samples and protected files were unchanged; the Enigma2 PID was unchanged during
+this separate engine run. Peak process RSS including the full inventory and
+online probe was 115.3 MiB. First full inventory load/grouping took 9.68 seconds;
+the repeated in-memory grouping took 0.016 ms.
+
+To avoid that full read merely to display satellite choices, group counters now
+live in the small saved inventory summary. The existing summary was populated from
+the verified grouping result, without another bouquet analysis. After copying the
+corrected sources with an NG backup, initialization plus group-list retrieval took
+133.43 ms with zero full-inventory rows loaded and load_inventory patched to fail.
+The Enigma2 PID remained 8676 and protected files were unchanged.
+
+The GitHub selection probe fetched the pinned upstream index for one real satellite
+and reopened its selection cache with HTTP forbidden. It correctly stopped at the
+unavailable exact-style PNG manifest. The online logo-update path therefore is
+**not validated end to end**. No original picon replacement was performed.
+
+52 tests passed locally and on Python 3.14.7 on the receiver (5.01 seconds for the
+hardware suite). Three further checks executed the receiver's actual compiled
+Screen.deleteGUIScreen/doClose methods against candidate Browser components in an
+isolated interpreter. All closed cleanly. Protected files matched before/after.
+The current IPK is 39,496 bytes, SHA-256
+`14b8f63ff171e599ef2a9fc95ea05028f2cef89cd3fc87443ac397759bf672ee`.
+It remains hardware-validation-required.
+
+No forced module reload or package reinstall was performed. The running Enigma2
+session predates the final source copy. The corrected exit behavior and new
+satellite screens still need live session validation after a user-chosen GUI
+restart. The user's refusal to restart now remains in force. Do not label this
+release stable or replace official 1.5.1 until the outstanding display/style/
+transaction gates pass.

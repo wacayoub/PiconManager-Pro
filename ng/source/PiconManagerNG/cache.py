@@ -10,6 +10,7 @@ import time
 import uuid
 from pathlib import Path
 from .core import valid_filename
+from .groups import summarize
 from .storage import atomic_json, directory_lock, sync_dir
 
 
@@ -53,7 +54,7 @@ class InventoryCache:
                 os.replace(temp, destination)
                 sync_dir(self.directory)
                 doc = {'schema': 1, 'context': self.context, 'file': name, 'counts': dict(counts),
-                       'created_at': time.time(), 'rows': len(services)}
+                       'created_at': time.time(), 'rows': len(services), 'groups': summarize(services)}
                 atomic_json(self.summary_path, doc)
                 # Only replace this context's own snapshots. Other paths/radio settings stay reusable.
                 for old in self.directory.glob('services-' + self.key + '-*.gz'):

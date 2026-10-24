@@ -68,15 +68,18 @@ def _stream_index(url, wanted, key_fn):
 def load_catalog(services, cache_dir, force=False):
     srps, names = _wanted(services)
     fingerprint = hashlib.sha256(json.dumps([sorted(srps), sorted(names)]).encode()).hexdigest()
-    cache = Path(cache_dir) / 'catalog.json'
+    # Preserve each satellite selection's offline index instead of evicting it
+    # whenever the user switches to a different group.
+    cache = Path(cache_dir) / ('catalog-' + fingerprint + '.json')
     saved = None
-    if cache.is_file():
+    for candidate in (cache, Path(cache_dir) / 'catalog.json'):
         try:
-            doc = json.loads(cache.read_text(encoding='utf8'))
+            doc = json.loads(candidate.read_text(encoding='utf8'))
             if doc.get('fingerprint') == fingerprint:
                 saved = doc
                 if not force:
                     return saved
+                break
         except (OSError, ValueError):
             pass
     try:

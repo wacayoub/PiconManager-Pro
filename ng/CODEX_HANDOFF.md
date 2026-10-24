@@ -95,3 +95,43 @@ asked to activate the corrected UI. Do not restart/reboot/reinstall or attempt t
 force a live reload. The running Enigma2 session still has the earlier modules;
 the corrected menu will load in a later GUI session chosen by the user. Live
 visual verification of this simplified menu is pending that activation.
+
+## User request — self-testing and satellite selection
+
+The user asked to test the plugin directly and split it by satellite, like their
+existing Chocholousek plugin. The home still has only three entries. Mes picons
+now opens satellite positions plus a separate IPTV group. Mettre à jour offers
+multi-position selection before any HTTP; matching and plans are scoped to that
+selection. Namespace low bits do not create extra satellites; IPTV with DVB IDs
+stays IPTV. Read names from local satellites.xml, with an orbital-position fallback.
+Group counters are persisted in the inventory summary. Channel row labels are
+formatted only for the visible page, and per-selection catalogue caches survive
+switching satellites. LyngSat and exact artwork checks remain intact.
+
+Direct remote navigation of the existing simplified FHD UI confirmed startup,
+installed picon previews, page movement, and present/missing filters. **Exiting
+the browser caused an actual Enigma2 Python error.** Browser.self.items was a list
+that shadowed dict.items(), called by Screen.deleteGUIScreen/doClose. It has been
+renamed entries everywhere; regression tests now exercise screen destruction.
+The receiver's actual Screen.pyc bytecode independently confirmed the cause.
+Enigma2 recovered automatically during these tests. No restart/reboot command,
+forced module reload, or opkg reinstall was sent. Do not equate this automatic
+recovery with user authorization for another restart or with an explanation of
+the earlier full receiver reboot.
+
+52 tests now pass locally and on the receiver. Three additional hardware checks
+execute the receiver's actual compiled Screen deletion/close methods against the
+candidate Browser widgets in a separate Python process. These are real lifecycle
+contract checks, not a replacement for live session navigation of the corrected UI.
+The real saved inventory groups into 40 satellite positions and IPTV. All 107,252
+services and counts reconcile. Original PNG samples and protected files were
+unchanged. The GitHub index worked; the styled PNG manifest remains unavailable,
+so a real end-to-end artwork update is still blocked and no picons were replaced.
+
+The corrected NG files are backed up and aligned on disk on the receiver. Saved
+group metadata was added to NG's own summary, without another bouquet scan. Group
+list initialization then took 133.43 ms with zero full-inventory rows loaded.
+Enigma2 PID stayed 8676 while applying the files. Its session predates this final
+copy, so **live activation/visual validation of grouping and the exit fix remains
+pending**. Respect the user's deferred restart; do not force a reload or repeat
+the failing navigation with stale modules. See VALIDATION.md for package evidence.

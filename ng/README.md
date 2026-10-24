@@ -8,6 +8,15 @@ See [VALIDATION.md](VALIDATION.md) for measured results and remaining release ga
 
 - Simple home menu: **Mes picons**, **Mettre à jour**, **Réglages**. Backup,
   manual channel refresh and advanced tools stay inside Settings.
+- Mes picons opens a local list of satellite positions, with IPTV in a separate
+  group. Position names come from the receiver's satellites.xml. Group counters
+  are saved with the inventory so this list does not load all channels. Choose
+  a group to browse its current/missing picons. The home menu stays unchanged.
+- Mettre à jour first offers the same groups: OK selects one or more positions,
+  then green checks only that selection. Matching and replacement planning are
+  restricted to those services. Each selection retains its own offline catalogue
+  cache. This follows the position-selection principle used by
+  [Chocholousek Picons](https://github.com/s3n0/e2plugins/tree/master/ChocholousekPicons).
 - No automatic scan or HTTP at startup. Read a small saved summary; lazily load
   the local channel inventory only when opening Mes picons. A manual refresh is
   available at Réglages → Actualiser mes chaînes. No scan is silently triggered
@@ -18,6 +27,8 @@ See [VALIDATION.md](VALIDATION.md) for measured results and remaining release ga
   of being downloaded on every visit. Corrupt cached images are rejected.
 - Neo Dark dashboard and paginated channel/installed/missing views, native focus,
   remote navigation and color keys, separate HD and FHD geometries.
+- Channel labels are formatted for the visible page only, including large IPTV
+  groups. Browser data does not shadow the native Screen.items() lifecycle method.
 - Workers for scanning, network, downloads and transactions; no GUI-thread HTTP.
 - Reachable TV/radio bouquet traversal and lamedb4/5 names. SAT, cable, terrestrial,
   4097/5001/5002/private IPTV refs, namespace/type fallback and Unicode SNP lookup.

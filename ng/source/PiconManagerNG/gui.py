@@ -12,6 +12,24 @@ from Components.Pixmap import Pixmap
 from enigma import eTimer, getDesktop
 
 
+class ChannelRows:
+    """Build labels only for the visible page, including very large IPTV groups."""
+    def __init__(self, services):
+        self.services = services
+
+    def __len__(self):
+        return len(self.services)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [self.row(s) for s in self.services[index]]
+        return self.row(self.services[index])
+
+    @staticmethod
+    def row(service):
+        return ('%s  ·  %s' % (service['name'] or 'Sans nom', service['kind']), service)
+
+
 class Worker:
     def setup_worker(self):
         self.busy = False
@@ -91,7 +109,8 @@ class Browser(Screen, Worker):
                  blue=None, ok=None, footer='ROUGE Retour', selectable=False):
         self.skin = browser_skin(getDesktop(0).size().width())
         Screen.__init__(self, session)
-        self.items = rows
+        # Screen is a dict and calls items() when destroying widgets on exit.
+        self.entries = rows
         self.page = 0
         self.selected = set()
         self.selectable = selectable
@@ -121,22 +140,22 @@ class Browser(Screen, Worker):
 
     def refresh(self):
         start = self.page * self.PAGE
-        visible = self.items[start:start+self.PAGE]
+        visible = self.entries[start:start+self.PAGE]
         self['rows'].setList([(('☑ ' if start+i in self.selected else '☐ ') if self.selectable else '') + row[0]
                               for i, row in enumerate(visible)])
         # MenuList keeps plain labels to avoid copying all 100,000 services.
         self['status'].setText('%d éléments • page %d/%d • %d sélectionnés' %
-            (len(self.items), self.page+1, max(1, (len(self.items)+self.PAGE-1)//self.PAGE), len(self.selected)))
+            (len(self.entries), self.page+1, max(1, (len(self.entries)+self.PAGE-1)//self.PAGE), len(self.selected)))
         self.focus()
 
     def index(self):
-        if not self.items:
+        if not self.entries:
             return None
         return self.page * self.PAGE + self['rows'].getSelectedIndex()
 
     def row(self):
         index = self.index()
-        return self.items[index] if index is not None and index < len(self.items) else None
+        return self.entries[index] if index is not None and index < len(self.entries) else None
 
     def focus(self):
         row = self.row()
@@ -144,6 +163,10 @@ class Browser(Screen, Worker):
         self['detail'].setText(text)
         for name, path in (('before', before), ('after', after)):
             widget = self[name]
+            if path:
+                self[name + '_label'].show()
+            else:
+                self[name + '_label'].hide()
             if widget.instance is None:
                 continue
             if path and Path(path).is_file():
@@ -156,7 +179,7 @@ class Browser(Screen, Worker):
     def turn_page(self, delta):
         if self.busy:
             return
-        self.page = min(max(0, self.page+delta), max(0, (len(self.items)-1)//self.PAGE))
+        self.page = min(max(0, self.page+delta), max(0, (len(self.entries)-1)//self.PAGE))
         self.refresh()
 
     def toggle(self):
@@ -169,7 +192,7 @@ class Browser(Screen, Worker):
             self.refresh()
 
     def toggle_all(self):
-        self.selected = set() if len(self.selected) == len(self.items) else set(range(len(self.items)))
+        self.selected = set() if len(self.selected) == len(self.entries) else set(range(len(self.entries)))
         self.refresh()
 
     def action(self, key):
