@@ -1,4 +1,5 @@
 import tempfile
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +15,44 @@ def service(position, sid=1, kind='SAT', installed=None, name='Test'):
 
 
 class SatelliteGroups(unittest.TestCase):
+    def test_legacy_group_summary_migrates_once_without_scanning_or_changing_scan_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            def manager(): return Manager(root/'data', root, [str(root)])
+            cache = manager()._inventory_cache()
+            doc = cache.save([service(192)], {'total': 1, 'found': 0, 'missing': 1})
+            doc.pop('groups')
+            cache.summary_path.write_text(json.dumps(doc))
+            with patch('PiconManagerNG.core.scan_bouquet_files', side_effect=AssertionError('unexpected scan')):
+                self.assertEqual(len(manager().list_groups()), 1)
+                with patch.object(Manager, 'load_inventory', side_effect=AssertionError('repeated inventory load')):
+                    reopened = manager()
+                    self.assertEqual(len(reopened.list_groups()), 1)
+                    self.assertEqual(reopened.snapshot['created_at'], doc['created_at'])
+                    self.assertEqual(reopened.snapshot['file'], doc['file'])
+                    self.assertEqual(reopened.services, [])
+
+    def test_favorites_and_last_group_survive_reopen_without_invalidating_inventory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            def manager(): return Manager(root/'data', root, [str(root)])
+            saved = manager()
+            saved._inventory_cache().save([service(192), service(3530), service(192, kind='IPTV')],
+                                          {'total': 3, 'found': 0, 'missing': 3})
+            app = manager()
+            summary_before = app._inventory_cache().summary_path.read_bytes()
+            with patch.object(Manager, 'load_inventory', side_effect=AssertionError('unexpected inventory load')):
+                app.toggle_favorite('SAT:3530')
+                app.remember_group('SAT:192')
+                reopened = manager()
+                self.assertEqual([g['key'] for g in reopened.list_groups()], ['SAT:3530', 'SAT:192', 'IPTV'])
+                self.assertTrue(reopened.list_groups()[0]['favorite'])
+                self.assertEqual(reopened.last_group, 'SAT:192')
+                reopened.toggle_favorite('SAT:3530')
+                self.assertEqual([g['key'] for g in reopened.list_groups()], ['SAT:192', 'SAT:3530', 'IPTV'])
+                with self.assertRaises(ValueError): reopened.toggle_favorite('SAT:999')
+                self.assertEqual(summary_before, reopened._inventory_cache().summary_path.read_bytes())
+
     def test_saved_groups_open_without_reading_full_inventory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

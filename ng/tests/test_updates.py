@@ -43,6 +43,49 @@ class Transactions(unittest.TestCase):
         updates.restore_backup(batch, self.root)
         self.assertFalse((self.root / NAME).exists())
 
+    def test_existing_fallback_picon_is_kept_in_missing_only_mode(self):
+        fallback = self.root / 'example.png'
+        fallback.write_bytes(self.png)
+        manifest = {'schema': 1, 'style_id': 'test', 'items': {NAME: self.entry}}
+        service = {'picon': NAME, 'installed': str(fallback)}
+        self.assertEqual(updates.plan_replacements([service], self.root, manifest, 'test', overwrite=False), [])
+        self.assertEqual(len(updates.plan_replacements([service], self.root, manifest, 'test', overwrite=True)), 1)
+
+    def test_progress_covers_preparation_application_and_restoration(self):
+        messages = []
+        batch = updates.stage_plan([self.entry], self.root, self.backups, fetch=lambda _: self.png, progress=messages.append)
+        result = updates.apply_staged(batch, self.root, progress=messages.append)
+        self.assertEqual((result['added'], result['replaced']), (1, 0))
+        updates.restore_backup(batch, self.root, progress=messages.append)
+        self.assertIn('Préparation : 1 / 1 picons', messages)
+        self.assertIn('Application : 1 / 1 picons', messages)
+        self.assertIn('Restauration : 1 / 1 picons', messages)
+        self.assertFalse((self.root / NAME).exists())
+
+    def test_undo_uses_commit_order_and_rejects_a_stale_confirmation(self):
+        from PiconManagerNG.runtime import Manager
+        first = self.stage()
+        updates.apply_staged(first, self.root)
+        first = first.rename(self.backups / 'zzzz-first')
+        name2 = 'second.png'
+        entry2 = dict(self.entry, name=name2)
+        second = self.stage([entry2])
+        updates.apply_staged(second, self.root)
+        second = second.rename(self.backups / 'aaaa-second')
+        app = Manager(Path(self.tmp.name)/'data', Path(self.tmp.name), [str(self.root)])
+        # The fixture data directory uses the same transaction folder as the engine.
+        app.data = Path(self.tmp.name)
+        app._inventory_cache().save([], {'total': 0, 'found': 0, 'missing': 0})
+        self.assertEqual(app.last_update()['path'], str(second))
+        with self.assertRaises(ValueError): app.undo_last(first)
+        self.assertTrue((self.root / NAME).exists())
+        self.assertTrue((self.root / name2).exists())
+        result = app.undo_last(second)
+        self.assertEqual(result['restored'], 1)
+        self.assertFalse((self.root / name2).exists())
+        self.assertTrue((self.root / NAME).exists())
+        self.assertEqual(app.last_update()['path'], str(first))
+
     def test_crash_after_replace_recovers_from_write_ahead_journal(self):
         (self.root / NAME).write_bytes(b'original')
         batch = self.stage()

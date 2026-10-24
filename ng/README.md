@@ -12,6 +12,9 @@ See [VALIDATION.md](VALIDATION.md) for measured results and remaining release ga
   group. Position names come from the receiver's satellites.xml. Group counters
   are saved with the inventory so this list does not load all channels. Choose
   a group to browse its current/missing picons. The home menu stays unchanged.
+- **Blue marks/unmarks a favorite** in the group list. Favorites appear first;
+  the last opened position is focused on the next visit. Navigation preferences
+  are saved separately, so they do not invalidate the inventory or trigger a scan.
 - Mettre à jour first offers the same groups: OK selects one or more positions,
   then green checks only that selection. Matching and replacement planning are
   restricted to those services. Each selection retains its own offline catalogue
@@ -41,6 +44,16 @@ See [VALIDATION.md](VALIDATION.md) for measured results and remaining release ga
 - Profile capture from original pixels, selective dry-run, staged before/after
   preview, explicit application, SHA-256 and decoded PNG checks, durable preimages
   and journal, atomic file replacement, undo and interruption recovery.
+- Guided update: choose groups, inspect proposals, prepare selected picons, compare
+  the current logo on the left with the new one on the right, then confirm. Missing
+  picons are proposed first and selected by default; replacements require an
+  explicit choice. Existing SNP/namespace-fallback picons are also protected by
+  the missing-only mode. Preparation, application and undo show current counts.
+- **Réglages → Annuler la dernière mise à jour** restores the latest applied batch
+  for the chosen destination, including removal of new files. The same action is
+  available with blue after applying a preview. It asks for confirmation and
+  refuses stale confirmations or external file changes. Older backups remain in
+  Réglages → Plus d’options → Sauvegardes.
 - Missing-only default. Updates to existing files require a deliberate setting and
   per-batch confirmation. Interrupted operations block new staging until restored.
 - Verified online NG plugin package download/installation with code backup and
@@ -74,6 +87,9 @@ Catalogue indexes and LyngSat pages remain reusable without time-based automatic
 downloads. **Mettre à jour** explicitly checks GitHub; when offline, compatible
 previously saved metadata remains available, and PNG integrity/style checks still
 apply. A missing or uncalibrated public catalogue is not bypassed by this cache.
+Legacy inventory summaries acquire their group counters once from saved rows;
+the migration preserves the scan date and never parses bouquets. Navigation is
+stored in `navigation.json` under the NG data directory.
 
 Runtime dependencies include `python3-compression` for saved inventory snapshots.
 

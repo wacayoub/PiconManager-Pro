@@ -103,7 +103,9 @@ class PiconManagerNGScreen(Screen, Worker):
         if self.busy:
             return
         def ready(groups):
-            rows = [('%s  ·  %d chaînes' % (g['label'], g['total']), g) for g in groups]
+            def group_rows(items):
+                return [('%s%s  ·  %d chaînes' % ('★ ' if g.get('favorite') else '', g['label'], g['total']), g) for g in items]
+            rows = group_rows(groups)
             def detail(row):
                 g = row[1]
                 return ('%s\n%d présents • %d manquants' % (g['label'], g['found'], g['missing']), None, None)
@@ -119,10 +121,22 @@ class PiconManagerNGScreen(Screen, Worker):
                 if view.row():
                     group = view.row()[1]
                     self.channels(group_keys=[group['key']], title=group['label'], owner=view)
-            footer = ('OK Sélectionner   JAUNE Tout/aucun   VERT Vérifier   ROUGE Retour' if updating else
-                      'OK Voir les picons   VERT Mettre à jour ce groupe   ROUGE Retour')
+            def favorite(view):
+                if not view.row():
+                    return
+                key = view.row()[1]['key']
+                selected_keys = {view.entries[i][1]['key'] for i in view.selected}
+                def refreshed(items):
+                    index = next(i for i, g in enumerate(items) if g['key'] == key)
+                    selected = {i for i, g in enumerate(items) if g['key'] in selected_keys}
+                    view.replace_entries(group_rows(items), index, selected)
+                view.work(lambda: self.manager.toggle_favorite(key), refreshed)
+            footer = ('OK Choisir   VERT Vérifier   BLEU Favori   JAUNE Tout   ROUGE Retour' if updating else
+                      'OK Voir les picons   VERT Mettre à jour   BLEU Favori   ROUGE Retour')
+            index = next((i for i, g in enumerate(groups) if g['key'] == self.manager.last_group), 0)
             self.session.open(Browser, 'Mettre à jour · Satellites / IPTV' if updating else 'Mes picons · Satellites / IPTV',
-                              rows, detail=detail, ok=browse, green=update, selectable=updating, footer=footer)
+                              rows, detail=detail, ok=browse, green=update, blue=favorite,
+                              selectable=updating, initial_index=index, footer=footer)
         self.work(self.manager.list_groups, ready)
 
     def channels(self, missing=False, group_keys=None, title=None, owner=None):
@@ -133,6 +147,8 @@ class PiconManagerNGScreen(Screen, Worker):
             return
         mode = {'value': 2 if missing else 0}
         def filtered():
+            if len(group_keys) == 1:
+                self.manager.remember_group(group_keys[0])
             services = self.manager.group_services(group_keys)
             return ChannelRows([s for s in services
                                 if mode['value'] == 0 or bool(s.get('installed')) == (mode['value'] == 1)])
@@ -159,9 +175,8 @@ class PiconManagerNGScreen(Screen, Worker):
         def filter_rows(view):
             mode['value'] = (mode['value'] + 1) % 3
             def ready(rows):
-                view.entries, view.page = rows, 0
                 view['title'].setText(title + ' · ' + ('Mes picons', 'Présents', 'Manquants')[mode['value']])
-                view.refresh()
+                view.replace_entries(rows)
             view.work(filtered, ready)
         def ready(rows):
             self.session.open(Browser, title + (' · Manquants' if missing else ' · Mes picons'), rows,
@@ -217,9 +232,6 @@ class PiconManagerNGScreen(Screen, Worker):
             if not plan:
                 self.info('Aucune mise à jour vérifiée pour les chaînes et le profil actuels.')
                 return
-            names = {s['picon']: s['name'] for s in self.manager.services}
-            for p in plan:
-                p['label'] = names.get(p['name']) or p['name']
             rows = [(('%s · %s' % ('Remplacer' if p['action'] == 'replace' else 'Ajouter', p['label'])), p) for p in plan]
             def prepare(view):
                 selected = [view.entries[i][1] for i in sorted(view.selected)]
@@ -228,32 +240,73 @@ class PiconManagerNGScreen(Screen, Worker):
                     return
                 def ready(batch):
                     self.preview(batch, selected)
-                view.work(lambda: self.manager.stage(selected), ready)
+                view.work(lambda: self.manager.stage(selected, view.progress), ready)
             title = 'Mises à jour mémorisées' if self.manager.offline_update else 'Mises à jour disponibles'
             self.session.open(Browser, title + ' · ' + group_title, rows, selectable=True, green=prepare,
-                detail=lambda row: (row[1]['action'] + '\n' + row[1]['name'], str(self.manager.target / row[1]['name']), None),
-                footer='OK Sélectionner   JAUNE Tout/aucun   VERT Préparer   ←→ Pages   ROUGE Retour')
-        (owner if owner is not None else self).work(lambda: self.manager.check_updates(group_keys), done)
+                selected={i for i, p in enumerate(plan) if p['action'] == 'new'},
+                detail=lambda row: (row[1]['label'] + '\n' + ('Picon manquant' if row[1]['action'] == 'new' else 'Remplacement proposé'), str(self.manager.target / row[1]['name']), None),
+                footer='OK Choisir   JAUNE Tout/aucun   VERT Voir l’aperçu   ROUGE Retour')
+        worker = owner if owner is not None else self
+        def task():
+            self.manager.remember_group(group_keys[0])
+            return self.manager.check_updates(group_keys, worker.progress)
+        worker.work(task, done)
 
     def preview(self, batch, entries):
         rows = [(p.get('label', p['name']), p) for p in entries]
         def detail(row):
             name = row[1]['name']
-            return (name + '\nPrêt • empreinte vérifiée', self.manager.target / name, Path(batch) / 'new' / name)
+            return (row[0] + '\nPrêt à appliquer', self.manager.target / name, Path(batch) / 'new' / name)
         def apply(view):
             def confirmed(value):
                 if value:
                     def done(result):
-                        view['status'].setText('%d picons appliqués • sauvegarde disponible' % result['updated'])
+                        view['status'].setText('%d ajoutés • %d remplacés • sauvegarde conservée' % (result['added'], result['replaced']))
                         view.callbacks['green'] = None
-                        view['footer'].setText('↑↓ Comparer   ←→ Pages   ROUGE Retour')
+                        view.callbacks['blue'] = lambda v: self.undo_last(owner=v, expected_path=str(batch))
+                        view.preview_labels = ('Avant', 'Après')
+                        view.detail_callback = lambda r: (r[0] + '\nMise à jour terminée',
+                            Path(batch) / 'old' / r[1]['name'], self.manager.target / r[1]['name'])
+                        view['footer'].setText('↑↓ Comparer   BLEU Annuler la mise à jour   ROUGE Retour')
+                        view.focus()
                         self.refresh_counts()
-                    view.work(self.manager.apply, done)
+                    view.work(lambda: self.manager.apply(view.progress), done)
             self.session.openWithCallback(confirmed, MessageBox,
-                'Appliquer les %d picons sélectionnés ?\nLes originaux seront sauvegardés avant remplacement.' % len(entries),
+                'Appliquer %d nouveaux picons et %d remplacements ?\nVous pourrez annuler cette mise à jour.' %
+                (sum(p['action'] == 'new' for p in entries), sum(p['action'] == 'replace' for p in entries)),
                 MessageBox.TYPE_YESNO, default=False)
         self.session.open(Browser, 'Aperçu avant / après', rows, detail=detail, green=apply,
                           footer='↑↓ Comparer   ←→ Pages   VERT Appliquer   ROUGE Annuler')
+
+    def undo_last(self, owner=None, expected_path=None):
+        worker = owner if owner is not None else self
+        if worker.busy:
+            return
+        def ready(item):
+            if not item:
+                self.info('Aucune mise à jour à annuler.')
+                return
+            if expected_path is not None and Path(item['path']).resolve() != Path(expected_path).resolve():
+                self.info('Une autre mise à jour est plus récente. Utilisez Réglages → Annuler la dernière mise à jour.')
+                return
+            def confirmed(value):
+                if not value:
+                    return
+                def done(result):
+                    self.refresh_counts()
+                    if owner is not None:
+                        owner.callbacks['blue'] = None
+                        owner['footer'].setText('ROUGE Retour')
+                        owner.detail_callback = lambda r: (r[0] + '\nMise à jour annulée', self.manager.target / r[1]['name'], None)
+                        owner.preview_labels = ('Actuel', 'Nouveau')
+                        owner.focus()
+                    worker['status'].setText('%d picons restaurés • mise à jour annulée' % result['restored'])
+                    self.info('Mise à jour annulée. %d picons restaurés.' % result['restored'])
+                worker.work(lambda: self.manager.undo_last(item['path'], worker.progress), done)
+            self.session.openWithCallback(confirmed, MessageBox,
+                'Annuler la dernière mise à jour (%d picons) ?\nLes anciens picons seront restaurés et les ajouts retirés.' % item['count'],
+                MessageBox.TYPE_YESNO, default=False)
+        worker.work(self.manager.last_update, ready)
 
     def backups(self):
         def done(items):
@@ -266,7 +319,7 @@ class PiconManagerNGScreen(Screen, Worker):
                 def confirm(value):
                     if value:
                         def task():
-                            updates.restore_backup(item['path'], self.manager.target)
+                            updates.restore_backup(item['path'], self.manager.target, progress=view.progress)
                             return self.manager.refresh_installed()
                         def ready(value):
                             item['state'] = 'restored'
@@ -283,7 +336,7 @@ class PiconManagerNGScreen(Screen, Worker):
         if self.busy:
             return
         choices = [('Préférences', self.preferences), ('Actualiser mes chaînes', self.scan),
-                   ('Sauvegardes', self.backups), ('Plus d’options', self.more_options)]
+                   ('Annuler la dernière mise à jour', self.undo_last), ('Plus d’options', self.more_options)]
         def chosen(value):
             if value:
                 value[1]()
@@ -293,7 +346,7 @@ class PiconManagerNGScreen(Screen, Worker):
         if self.busy:
             return
         choices = [('Sources', self.sources), ('LyngSat Logo', self.lyngsat),
-                   ('Style Chocholousek', self.style), ('Diagnostic et version', self.diagnostics)]
+                   ('Sauvegardes', self.backups), ('Style Chocholousek', self.style), ('Diagnostic et version', self.diagnostics)]
         def chosen(value):
             if value:
                 value[1]()

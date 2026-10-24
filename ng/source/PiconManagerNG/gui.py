@@ -34,6 +34,8 @@ class Worker:
     def setup_worker(self):
         self.busy = False
         self._events = queue.Queue()
+        self._progress_lock = threading.Lock()
+        self._progress_text = None
         self._timer = eTimer()
         self._timer.callback.append(self._poll)
         self.onClose.append(self._timer.stop)
@@ -42,6 +44,8 @@ class Worker:
         if self.busy:
             return
         self.busy = True
+        with self._progress_lock:
+            self._progress_text = None
         self['status'].setText('Opération en cours…')
         def run():
             try:
@@ -53,12 +57,13 @@ class Worker:
         self._timer.start(100, False)
 
     def _poll(self):
+        with self._progress_lock:
+            text, self._progress_text = self._progress_text, None
+        if text is not None:
+            self['status'].setText(text)
         try:
             done, value, error = self._events.get_nowait()
         except queue.Empty:
-            return
-        if done is None:
-            self['status'].setText(value)
             return
         self._timer.stop()
         self.busy = False
@@ -71,9 +76,9 @@ class Worker:
             done(value)
 
     def progress(self, text):
-        # Keep the queue bounded even while large bouquets scan faster than paints.
-        if self._events.qsize() < 4:
-            self._events.put((None, text, None))
+        # Keep the newest count, even when disk operations outpace the GUI timer.
+        with self._progress_lock:
+            self._progress_text = text
 
     def leave(self):
         if self.busy:
@@ -94,10 +99,10 @@ def browser_skin(width):
             label('title', 40, 30, 1195, 55, 35) +
             label('rows', 40, 110, 700, 470, 22, 'itemHeight="%d" foregroundColorSelected="#FFFFFF" backgroundColorSelected="#244461" enableWrapAround="1"' % n(39)) +
             label('detail', 775, 110, 460, 75, 19) +
-            label('before_label', 790, 198, 400, 30, 19) +
-            '<widget name="before" %s alphatest="blend" />' % rect(865, 234, 250, 150) +
-            label('after_label', 790, 405, 400, 30, 19) +
-            '<widget name="after" %s alphatest="blend" />' % rect(865, 441, 250, 150) +
+            label('before_label', 780, 218, 205, 30, 19) +
+            '<widget name="before" %s alphatest="blend" />' % rect(780, 265, 205, 123) +
+            label('after_label', 1025, 218, 205, 30, 19) +
+            '<widget name="after" %s alphatest="blend" />' % rect(1025, 265, 205, 123) +
             label('status', 40, 600, 1195, 35, 20) +
             label('footer', 40, 652, 1195, 35, 20) + '</screen>')
 
@@ -106,14 +111,18 @@ class Browser(Screen, Worker):
     PAGE = 250
 
     def __init__(self, session, title, rows, detail=None, green=None, yellow=None,
-                 blue=None, ok=None, footer='ROUGE Retour', selectable=False):
+                 blue=None, ok=None, footer='ROUGE Retour', selectable=False,
+                 initial_index=0, selected=None):
         self.skin = browser_skin(getDesktop(0).size().width())
         Screen.__init__(self, session)
         # Screen is a dict and calls items() when destroying widgets on exit.
         self.entries = rows
-        self.page = 0
-        self.selected = set()
+        initial_index = min(max(0, initial_index), max(0, len(rows)-1))
+        self.page = initial_index // self.PAGE
+        self._restore_index = initial_index % self.PAGE
+        self.selected = {i for i in (selected or ()) if 0 <= i < len(rows)}
         self.selectable = selectable
+        self.preview_labels = ('Actuel', 'Nouveau')
         self.detail_callback = detail or (lambda row: (row[0], None, None))
         self.callbacks = {'green': green, 'yellow': yellow, 'blue': blue, 'ok': ok}
         self['title'] = Label(title)
@@ -143,6 +152,9 @@ class Browser(Screen, Worker):
         visible = self.entries[start:start+self.PAGE]
         self['rows'].setList([(('☑ ' if start+i in self.selected else '☐ ') if self.selectable else '') + row[0]
                               for i, row in enumerate(visible)])
+        if self._restore_index is not None:
+            self['rows'].moveToIndex(min(self._restore_index, max(0, len(visible)-1)))
+            self._restore_index = None
         # MenuList keeps plain labels to avoid copying all 100,000 services.
         self['status'].setText('%d éléments • page %d/%d • %d sélectionnés' %
             (len(self.entries), self.page+1, max(1, (len(self.entries)+self.PAGE-1)//self.PAGE), len(self.selected)))
@@ -160,10 +172,13 @@ class Browser(Screen, Worker):
     def focus(self):
         row = self.row()
         text, before, after = self.detail_callback(row) if row else ('Aucun élément', None, None)
+        before = before if before and Path(before).is_file() else None
+        after = after if after and Path(after).is_file() else None
         self['detail'].setText(text)
-        for name, path in (('before', before), ('after', after)):
+        for name, path, label in (('before', before, self.preview_labels[0]), ('after', after, self.preview_labels[1])):
             widget = self[name]
-            if path:
+            self[name + '_label'].setText('Manquant' if name == 'before' and not before and after else label)
+            if path or (name == 'before' and after):
                 self[name + '_label'].show()
             else:
                 self[name + '_label'].hide()
@@ -180,6 +195,14 @@ class Browser(Screen, Worker):
         if self.busy:
             return
         self.page = min(max(0, self.page+delta), max(0, (len(self.entries)-1)//self.PAGE))
+        self._restore_index = 0
+        self.refresh()
+
+    def replace_entries(self, rows, initial_index=0, selected=None):
+        self.entries = rows
+        index = min(max(0, initial_index), max(0, len(rows)-1))
+        self.page, self._restore_index = divmod(index, self.PAGE)
+        self.selected = set(selected or ())
         self.refresh()
 
     def toggle(self):

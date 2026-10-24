@@ -20,6 +20,9 @@ class Component:
     def setList(self, value): self.value = value
     def getCurrent(self): return self.value[self.index] if self.value else None
     def getSelectedIndex(self): return self.index
+    def moveToIndex(self, index):
+        self.index = min(max(0, index), max(0, len(self.value)-1))
+        for callback in self.onSelectionChanged: callback()
     def show(self): pass
     def hide(self): pass
     def up(self):
@@ -195,10 +198,14 @@ class NeoDark(unittest.TestCase):
                 selection['keys'].actions['ok']()
                 selection['keys'].actions['down']()
                 selection['keys'].actions['ok']()
+                selection['keys'].actions['blue']()  # reordering a favorite retains selected group identities
+                self.assertEqual(selection.row()[1]['key'], 'SAT:3530')
+                self.assertTrue(selection.row()[0].startswith('★'))
+                self.assertEqual({selection.entries[i][1]['key'] for i in selection.selected}, {'SAT:192', 'SAT:3530'})
                 with patch.object(app, 'check_updates', return_value=[]) as update, \
                         patch.object(selection, 'work', wraps=selection.work) as visible_work:
                     selection['keys'].actions['green']()
-                    update.assert_called_once_with(['SAT:192', 'SAT:3530'])
+                    update.assert_called_once_with(['SAT:3530', 'SAT:192'], selection.progress)
                     visible_work.assert_called_once()
                 for view in views:
                     view['keys'].actions['red']()
@@ -222,3 +229,86 @@ class NeoDark(unittest.TestCase):
                 view.refresh()
                 view['keys'].actions['cancel']()
                 self.assertTrue(view.closed)
+
+    def test_restored_focus_pagination_and_latest_progress(self):
+        with patch.object(self.gui, 'getDesktop', lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1280))):
+            rows = [('Channel %d' % i, i) for i in range(600)]
+            view = self.gui.Browser(MagicMock(), 'Remembered', rows, initial_index=503)
+            view.refresh()
+            self.assertEqual(view.row()[1], 503)
+            for count in range(10000): view.progress('Préparation : %d / 10000' % count)
+            self.assertEqual(view._events.qsize(), 0)
+            view._poll()
+            self.assertEqual(view['status'].value, 'Préparation : 9999 / 10000')
+            view.replace_entries(rows[:2])
+            self.assertEqual(view.row()[1], 0)
+            view.leave()
+
+    def test_guided_update_preview_confirmation_and_one_step_undo(self):
+        import io
+        import hashlib
+        from PIL import Image
+        from PiconManagerNG import updates, catalog
+        from PiconManagerNG.runtime import Manager
+        from test_groups import service
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); picons = root/'picons'; picons.mkdir()
+            old, new = io.BytesIO(), io.BytesIO()
+            Image.new('RGBA', (400, 240), (0, 10, 20, 255)).save(old, format='PNG')
+            Image.new('RGBA', (400, 240), (20, 30, 40, 255)).save(new, format='PNG')
+            rows = [service(192, 1, name='Existing'), service(192, 2, name='Missing')]
+            original = picons/rows[0]['picon']; original.write_bytes(old.getvalue())
+            rows[0]['installed'] = str(original)
+            app = Manager(root/'data', root, [str(picons)])
+            self.assertFalse(app.settings['overwrite'])
+            app._inventory_cache().save(rows, {'total': 2, 'found': 1, 'missing': 1})
+            app._restore_summary()
+            app.profile = {'style_id': 'synthetic-test', 'dimensions': [400, 240], 'samples': []}
+            manifest = {'schema': 2, 'style_id': 'synthetic-test', 'dimensions': [400, 240],
+                        'sample_proofs': {}, 'render_verified': True,
+                        'items': {s['picon']: {'sha256': hashlib.sha256(new.getvalue()).hexdigest(),
+                            'url': 'https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/main/test.png'} for s in rows}}
+            views, prompts = [], []
+            session = MagicMock()
+            def open_view(cls, *args, **kwargs):
+                if cls is self.gui.Browser:
+                    view = cls(session, *args, **kwargs)
+                    view.work = lambda task, done: done(task())
+                    for callback in view.onLayoutFinish: callback()
+                    views.append(view)
+                    return view
+            session.open.side_effect = open_view
+            session.openWithCallback.side_effect = lambda callback, *args, **kwargs: prompts.append(callback)
+            original_stage = updates.stage_plan
+            def stage(*args, **kwargs):
+                return original_stage(*args, fetch=lambda _:new.getvalue(), **kwargs)
+            desktop = lambda _: types.SimpleNamespace(size=lambda: types.SimpleNamespace(width=lambda:1920))
+            with patch.object(self.plugin, 'Manager', return_value=app), \
+                    patch.object(self.plugin, 'getDesktop', desktop), patch.object(self.gui, 'getDesktop', desktop), \
+                    patch.object(catalog, 'load_catalog', return_value={'commit': 'a'*40, 'names': {}, 'srp': {}}), \
+                    patch('PiconManagerNG.runtime.read_json', return_value=manifest), patch.object(updates, 'stage_plan', side_effect=stage):
+                screen = self.plugin.PiconManagerNGScreen(session)
+                screen.work = lambda task, done: done(task())
+                screen.check_updates(['SAT:192'], 'Astra')
+                proposals = views[-1]
+                self.assertEqual([p[1]['label'] for p in proposals.entries], ['Missing'])
+                self.assertEqual(proposals.selected, {0})
+                proposals.action('green')
+                preview = views[-1]
+                self.assertEqual(preview['before_label'].value, 'Manquant')
+                self.assertIn('Missing', preview['detail'].value)
+                preview.action('green'); prompts.pop()(False)
+                self.assertFalse((picons/rows[1]['picon']).exists())
+                preview.action('green'); prompts.pop()(True)
+                self.assertEqual((picons/rows[1]['picon']).read_bytes(), new.getvalue())
+                self.assertEqual(original.read_bytes(), old.getvalue())
+                self.assertIn('1 ajoutés', preview['status'].value)
+                self.assertIsNone(preview.callbacks['green'])
+                preview.action('blue'); prompts.pop()(False)
+                self.assertTrue((picons/rows[1]['picon']).exists())
+                preview.action('blue'); prompts.pop()(True)
+                self.assertFalse((picons/rows[1]['picon']).exists())
+                self.assertEqual(original.read_bytes(), old.getvalue())
+                self.assertIn('annulée', preview['status'].value)
+                self.assertIsNone(preview.callbacks['blue'])
+                for view in views: view.leave()

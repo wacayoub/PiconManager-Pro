@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,7 +66,8 @@ def validate_manifest(doc, style_id):
 def plan_replacements(services, picon_dir, manifest, style_id, overwrite=True):
     items = validate_manifest(manifest, style_id)
     root = Path(picon_dir)
-    names = {s['picon'] for s in services if s.get('picon')}
+    names = {s['picon'] for s in services if s.get('picon') and
+             (overwrite or not s.get('installed') or not Path(s['installed']).is_file())}
     plan = []
     for name in sorted(names & items.keys()):
         target = root / name
@@ -92,6 +94,8 @@ def _journal(batch):
     doc = json.loads((batch / 'transaction.json').read_text(encoding='utf8'))
     if doc.get('schema') != 2 or not isinstance(doc.get('entries'), list):
         raise ValueError('Sauvegarde incompatible')
+    if 'committed_at_ns' in doc and (type(doc['committed_at_ns']) is not int or doc['committed_at_ns'] <= 0):
+        raise ValueError('Date de sauvegarde invalide')
     names = set()
     for entry in doc['entries']:
         name = entry.get('name')
@@ -117,7 +121,7 @@ def _verified_cached(path, sha256, dimensions):
         return None
 
 
-def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensions=(400, 240), cache_dir=None):
+def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensions=(400, 240), cache_dir=None, progress=None):
     """Reuse verified local PNGs before downloading selected changes."""
     root = Path(picon_dir).resolve()
     backups = Path(backup_root)
@@ -149,6 +153,8 @@ def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
             if entry['sha256'] in needed:
                 old_downloads.setdefault(entry['sha256'], []).append(folder / 'new' / entry['name'])
     try:
+        if progress:
+            progress('Préparation : 0 / %d picons' % len(plan))
         for item in plan:
             name = item['name']
             if not valid_filename(name) or not SHA.fullmatch(item.get('sha256', '')):
@@ -173,6 +179,8 @@ def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
                 atomic_bytes(cached, data)
             atomic_bytes(batch / 'new' / name, data)
             entries.append(dict(item, old_sha256=old_sha))
+            if progress:
+                progress('Préparation : %d / %d picons' % (len(entries), len(plan)))
         atomic_json(batch / 'transaction.json', {'schema': 2, 'state': 'staged', 'root': str(root),
                     'dimensions': list(expected_dimensions), 'entries': entries, 'date': batch.name})
         sync_dir(backups)
@@ -182,7 +190,7 @@ def stage_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
         raise
 
 
-def _restore(batch, doc):
+def _restore(batch, doc, progress=None):
     root = Path(doc['root'])
     # Validate ALL preimages and current targets before changing a single file.
     for entry in doc['entries']:
@@ -193,18 +201,22 @@ def _restore(batch, doc):
             raise ValueError('Picon modifié après la mise à jour : ' + name)
     doc['state'] = 'restoring'
     atomic_json(batch / 'transaction.json', doc)
-    for entry in reversed(doc['entries']):
+    if progress:
+        progress('Restauration : 0 / %d picons' % len(doc['entries']))
+    for index, entry in enumerate(reversed(doc['entries']), 1):
         target = root / entry['name']
         if entry['old_sha256'] is not None:
             atomic_bytes(target, (batch / 'old' / entry['name']).read_bytes())
         elif target.exists():
             target.unlink()
             sync_dir(root)
+        if progress:
+            progress('Restauration : %d / %d picons' % (index, len(doc['entries'])))
     doc['state'] = 'restored'
     atomic_json(batch / 'transaction.json', doc)
 
 
-def apply_staged(batch_path, picon_dir):
+def apply_staged(batch_path, picon_dir, progress=None):
     batch = Path(batch_path)
     root = Path(picon_dir).resolve()
     with directory_lock(root):
@@ -233,17 +245,24 @@ def apply_staged(batch_path, picon_dir):
         doc['state'] = 'applying'
         atomic_json(batch / 'transaction.json', doc)
         try:
-            for entry in doc['entries']:
+            if progress:
+                progress('Application : 0 / %d picons' % len(doc['entries']))
+            for index, entry in enumerate(doc['entries'], 1):
                 target = root / entry['name']
                 if digest(target) != entry['old_sha256']:
                     raise ValueError('Picon modifié pendant l’application')
                 atomic_bytes(target, (batch / 'new' / entry['name']).read_bytes())
+                if progress:
+                    progress('Application : %d / %d picons' % (index, len(doc['entries'])))
             doc['state'] = 'committed'
+            doc['committed_at_ns'] = time.time_ns()
             atomic_json(batch / 'transaction.json', doc)
         except Exception:
-            _restore(batch, doc)
+            _restore(batch, doc, progress)
             raise
-    return {'updated': len(doc['entries']), 'backup': str(batch)}
+    added = sum(e['old_sha256'] is None for e in doc['entries'])
+    return {'updated': len(doc['entries']), 'added': added,
+            'replaced': len(doc['entries']) - added, 'backup': str(batch)}
 
 
 def apply_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensions=(400, 240)):
@@ -251,23 +270,27 @@ def apply_plan(plan, picon_dir, backup_root, fetch=fetch_blob, expected_dimensio
     return apply_staged(batch, picon_dir)
 
 
-def restore_backup(batch_path, picon_dir):
+def restore_backup(batch_path, picon_dir, progress=None):
     batch = Path(batch_path)
     root = Path(picon_dir).resolve()
     with directory_lock(root):
         doc = _journal(batch)
         if Path(doc['root']).resolve() != root or doc['state'] not in ('committed', 'applying', 'restoring'):
             raise ValueError('Restauration non applicable')
-        _restore(batch, doc)
+        _restore(batch, doc, progress)
     return len(doc['entries'])
 
 
 def list_backups(backup_root):
     result = []
-    for path in sorted(Path(backup_root).glob('*/transaction.json'), reverse=True):
+    for path in Path(backup_root).glob('*/transaction.json'):
         doc = _journal(path.parent)
         result.append({'path': str(path.parent), 'date': doc['date'], 'state': doc['state'],
-                       'count': len(doc['entries']), 'root': doc['root']})
+                       'count': len(doc['entries']), 'root': doc['root'],
+                       '_order': doc.get('committed_at_ns', path.stat().st_mtime_ns)})
+    result.sort(key=lambda item: item['_order'], reverse=True)
+    for item in result:
+        del item['_order']
     return result
 
 

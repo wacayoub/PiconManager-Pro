@@ -215,3 +215,51 @@ satellite screens still need live session validation after a user-chosen GUI
 restart. The user's refusal to restart now remains in force. Do not label this
 release stable or replace official 1.5.1 until the outstanding display/style/
 transaction gates pass.
+
+## Accepted usability improvements and successful live exit check
+
+The user accepted favorites, remembered position, guided updates, side-by-side
+preview, quick undo and readable progress. These are implemented without adding
+home-menu entries. Blue toggles favorites in group choices; reordering retains
+selected group identities. Navigation persists independently of the inventory.
+Missing picons sort first and are selected by default; installed fallback picons
+are also excluded in missing-only mode. Each apply/undo still needs confirmation.
+Quick undo selects the newest committed batch for the destination using durable
+commit timestamps and rejects a stale confirmation. Previous integrity, external
+change, recovery and source/style checks remain in place.
+
+Before applying these additions, the previously loaded satellite UI was tested
+directly at 1920×1080 in the receiver's current FHD session. A satellite channel
+list and an original picon preview were observed. Exiting returned cleanly through
+the satellite list, NG home and plugin browser. The PID remained 16589. This
+confirms the earlier native Screen.items() fix in a live session; it does not
+validate the new favorites/side-by-side screen in that session. No restart or
+reboot command was sent and no skin setting was changed.
+
+59 tests passed locally and on the receiver's Python 3.14.7 (5.59 seconds), plus
+three native compiled Screen destruction checks. New coverage includes persisted
+favorites and position without cache invalidation, retained group selection after
+favorite reordering, restored page/focus, coalesced progress, fallback preservation,
+commit-order undo and rejection of stale confirmation. A synthetic GUI workflow
+uses real transactions and PNGs to test missing-only proposal/selection, preview,
+refused and accepted apply, refused and accepted undo, and original preservation.
+All transaction writes in these checks were in disposable test directories.
+
+The receiver had a legacy refreshed inventory with no group summary. Migration
+added only group metadata from existing saved rows, preserving the scan date,
+original compressed row file and other NG data. It does not scan bouquets or use
+HTTP. Next initialization plus group retrieval took 698.33 ms with zero service
+rows loaded, with load_inventory patched to fail. Five NG source files were
+backed up and copied with matching hashes; PID 16589 and protected files were
+unchanged. No package reinstall or forced import reload was performed.
+
+The current IPK is 41,484 bytes, SHA-256
+`26a01e61f46e5f471e740ef388940e70d30cdadb201a676d3e7b0a22f1f313bb`.
+It remains hardware-validation-required. The new additions are stored on disk
+and need live visual validation in a later GUI session chosen by the user.
+
+The bounded off-host style check on the available upstream PNG candidates still
+failed: kapatid alpha bounds were (8,48,391,192) for the original versus
+(8,48,392,192) for the candidate; ckat also remained unequal. No approximate
+catalogue was published, and no installed artwork was replaced. Exact Chocholousek
+calibration and end-to-end approved production update/undo remain open.

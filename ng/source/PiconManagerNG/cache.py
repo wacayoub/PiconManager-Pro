@@ -10,7 +10,7 @@ import time
 import uuid
 from pathlib import Path
 from .core import valid_filename
-from .groups import summarize
+from .groups import summarize, saved_summary
 from .storage import atomic_json, directory_lock, sync_dir
 
 
@@ -92,3 +92,15 @@ class InventoryCache:
             except (OSError, EOFError, ValueError, TypeError, KeyError, UnicodeError) as exc:
                 raise ValueError('Les données mémorisées sont illisibles. Réglages → Actualiser mes chaînes.') from exc
         raise ValueError('Actualisez mes chaînes depuis les réglages.')
+
+    def add_group_summary(self, snapshot, groups):
+        """Upgrade a legacy snapshot once, without rewriting rows or scan date."""
+        with directory_lock(self.directory):
+            doc = self.summary()
+            if doc is None or doc['file'] != snapshot['file']:
+                raise ValueError('La liste mémorisée a changé. Ouvrez à nouveau Mes picons.')
+            upgraded = dict(doc, groups=groups)
+            if saved_summary(upgraded) is None:
+                raise ValueError('Compteurs de satellites invalides')
+            atomic_json(self.summary_path, upgraded)
+            return upgraded

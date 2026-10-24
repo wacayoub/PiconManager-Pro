@@ -53,6 +53,10 @@ class Manager:
         self.inventory_loaded = False
         self._groups = None
         self._restore_summary()
+        navigation = self._read('navigation.json', {})
+        self.navigation = navigation if isinstance(navigation, dict) else {}
+        favorites = self.navigation.get('favorites', [])
+        self.navigation['favorites'] = list(dict.fromkeys(k for k in favorites if isinstance(k, str))) if isinstance(favorites, list) else []
 
     def _inventory_cache(self):
         context = {'picon_dir': str(self.target.resolve()), 'bouquets': str(self.bouquets.resolve()),
@@ -76,11 +80,41 @@ class Manager:
             self._groups = groups.saved_summary(self.snapshot)
             if self._groups is None:
                 self._groups = groups.summarize(self.load_inventory())
+                if self.snapshot:
+                    self.snapshot = self._inventory_cache().add_group_summary(self.snapshot, self._groups)
             names = groups.satellite_names((self.bouquets / 'satellites.xml', '/etc/tuxbox/satellites.xml'))
             for group in self._groups:
                 if group['key'].startswith('SAT:') and group['key'] != 'SAT:unknown':
                     group['label'] = names.get(int(group['key'][4:]), group['label'])
-        return self._groups
+        favorites = set(self.navigation['favorites'])
+        rows = [dict(g, favorite=g['key'] in favorites) for g in self._groups]
+        return sorted(rows, key=lambda g: not g['favorite'])
+
+    def toggle_favorite(self, key):
+        if key not in {g['key'] for g in self.list_groups()}:
+            raise ValueError('Satellite ou groupe inconnu')
+        favorites = list(self.navigation['favorites'])
+        if key in favorites:
+            favorites.remove(key)
+        else:
+            favorites.append(key)
+        doc = dict(self.navigation, favorites=favorites)
+        atomic_json(self.data / 'navigation.json', doc)
+        self.navigation = doc
+        return self.list_groups()
+
+    def remember_group(self, key):
+        if key not in {g['key'] for g in self.list_groups()}:
+            raise ValueError('Satellite ou groupe inconnu')
+        if self.navigation.get('last_group') != key:
+            doc = dict(self.navigation, last_group=key)
+            atomic_json(self.data / 'navigation.json', doc)
+            self.navigation = doc
+
+    @property
+    def last_group(self):
+        value = self.navigation.get('last_group')
+        return value if isinstance(value, str) else None
 
     def group_services(self, keys=None):
         return groups.select(self.load_inventory(), keys)
@@ -159,7 +193,9 @@ class Manager:
         atomic_json(self.data / 'aliases.json', self.aliases)
         service['match'] = catalog.match_service(service, self.catalog, self.aliases)
 
-    def check_updates(self, group_keys=None):
+    def check_updates(self, group_keys=None, progress=None):
+        if progress:
+            progress('Recherche des mises à jour pour les groupes choisis…')
         services = self.group_services(group_keys)
         self.plan = []
         if not services:
@@ -185,24 +221,46 @@ class Manager:
         manifest = catalog.materialize_manifest(doc, services)
         self.plan = updates.plan_replacements(services, self.target, manifest,
                                               self.profile['style_id'], self.settings['overwrite'])
+        names = {s['picon']: s['name'] for s in services if s.get('picon')}
+        for entry in self.plan:
+            entry['label'] = names.get(entry['name']) or 'Sans nom'
+        self.plan.sort(key=lambda p: (p['action'] != 'new', p['label'].casefold()))
         if manifest_downloaded:
             atomic_json(cached, doc)
         return self.plan
 
-    def stage(self, selected):
+    def stage(self, selected, progress=None):
         if not self.profile:
             raise ValueError('Profil visuel absent')
         self.staged = updates.stage_plan(selected, self.target, self.backups,
-                                         expected_dimensions=self.profile['dimensions'])
+                                         expected_dimensions=self.profile['dimensions'], progress=progress)
         return self.staged
 
-    def apply(self):
+    def apply(self, progress=None):
         if not self.staged:
             raise ValueError('Aucun aperçu préparé')
-        result = updates.apply_staged(self.staged, self.target)
+        result = updates.apply_staged(self.staged, self.target, progress=progress)
         self.staged = None
+        if progress:
+            progress('Enregistrement de la liste des picons…')
         self.refresh_installed()
         return result
+
+    def last_update(self):
+        return next((item for item in updates.list_backups(self.backups)
+                     if Path(item['root']).resolve() == self.target.resolve() and
+                     item['state'] in ('committed', 'applying', 'restoring')), None)
+
+    def undo_last(self, expected_path, progress=None):
+        item = self.last_update()
+        if item is None:
+            raise ValueError('Aucune mise à jour à annuler.')
+        if Path(item['path']).resolve() != Path(expected_path).resolve():
+            raise ValueError('La dernière mise à jour a changé. Ouvrez à nouveau Annuler.')
+        restored = updates.restore_backup(item['path'], self.target, progress=progress)
+        self.staged = None
+        self.refresh_installed()
+        return {'restored': restored, 'backup': item['path']}
 
     def lookup_lyngsat(self):
         self.load_inventory()

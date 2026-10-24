@@ -135,3 +135,48 @@ Enigma2 PID stayed 8676 while applying the files. Its session predates this fina
 copy, so **live activation/visual validation of grouping and the exit fix remains
 pending**. Respect the user's deferred restart; do not force a reload or repeat
 the failing navigation with stale modules. See VALIDATION.md for package evidence.
+
+## Accepted suggestions — favorites, guided updates and quick undo
+
+The user accepted the proposed usability improvements with “Vasy”. The home
+still has three entries. Blue toggles favorites on satellite/IPTV choices;
+favorites sort first, and the last opened group is focused when returning.
+Navigation uses a separate navigation.json, without resetting saved inventory.
+Reordering favorites preserves update selections by group identity.
+
+Missing picons are proposed first and selected by default. Existing installed
+fallback/SNP picons are protected as well as exact filenames. Replacements require
+the existing deliberate overwrite setting and selection. Preview shows the channel
+name and side-by-side current/new artwork. After apply it uses saved preimages
+for the before image. Confirmation precedes every apply or undo.
+
+Settings now offers Annuler la dernière mise à jour; older backups are under
+Plus d’options. Quick undo is destination-specific and uses commit timestamps,
+not random suffixes in transaction folder names. It rejects a changed latest
+batch and retains the original integrity/external-change checks. Blue on a
+completed preview offers undo for that batch. Progress coalesces to the newest
+count for preparation, application and restoration, without filling the UI queue.
+
+59 tests pass locally and on the receiver, plus three checks with native compiled
+Screen destruction methods. A synthetic full GUI flow exercises missing-only
+selection, preview, refusal/acceptance of apply, refusal/acceptance of undo, and
+preservation of the original picon. Production artwork was not changed.
+
+Before copying these additions, direct FHD navigation of the already loaded
+satellite version confirmed channel preview and clean exit through groups, home
+and plugin browser. The earlier items() exit fix is now verified in a live session.
+The Enigma2 PID stayed 16589; no restart/reboot was requested or forced. The current
+receiver UI differs from the earlier Metrix appearance; no skin setting was changed.
+
+The receiver's refreshed legacy snapshot lacked group counters. It was upgraded
+once from its own saved rows, without bouquets/HTTP, preserving the scan date,
+row file and other NG data. Group initialization then took 698.33 ms with no full
+inventory load. Five NG sources were backed up and copied; protected files and
+Enigma2 PID were unchanged. No opkg reinstall or live reload occurred. **These
+new additions await a later user-authorized GUI session for visual validation.**
+
+A bounded off-host comparison of the available upstream PNG candidates (ckat and
+kapatid) still failed pixel equality with original artwork. Do not publish the
+approximate recipe or claim online new-logo updates are ready. The exact-style
+catalogue, new screen validation and real approved update/restore remain release
+gates. Current package evidence is appended to VALIDATION.md.
