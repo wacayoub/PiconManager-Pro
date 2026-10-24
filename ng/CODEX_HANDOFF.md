@@ -180,3 +180,21 @@ kapatid) still failed pixel equality with original artwork. Do not publish the
 approximate recipe or claim online new-logo updates are ready. The exact-style
 catalogue, new screen validation and real approved update/restore remain release
 gates. Current package evidence is appended to VALIDATION.md.
+
+## User-requested next version — NG 2.0.1-r0
+
+The user requested “Vazy vers la nouvelle version”. Build/package/runtime metadata
+now identifies NG 2.0.1-r0, with a visible version in the home title. Its 59 tests
+and three native destruction checks passed on the receiver. The package was
+upgraded from 2.0.0-r0 through opkg, without force/reinstall flags. Preflight
+proposed only NG, source/data were backed up, all 16 installed payload files match
+the verified IPK, and protected files, NG data and 47,243 picons were unchanged.
+Enigma2 PID remained 16589. Package size/checksum are in VALIDATION.md.
+
+The user's latest request authorizes the NG upgrade, not an unapproved restart.
+A separate async question is pending: one Enigma2 GUI restart to load 2.0.1 and
+test the new UI. Do not restart, force reload or assume approval from elapsed
+time. If approved, check recordings first and perform only that one GUI restart;
+then test favorites, remembered position, navigation, side-by-side layout and
+safe local/temporary transaction checks. Do not replace production picons as a
+test. No new-logo catalogue is claimed, and official 1.5.1 remains preserved.

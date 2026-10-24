@@ -1,4 +1,4 @@
-# PiconManager NG 2.0.0 — validation record
+# PiconManager NG 2.x — validation record
 
 ## Confirmed on 2026-10-24
 
@@ -263,3 +263,31 @@ failed: kapatid alpha bounds were (8,48,391,192) for the original versus
 (8,48,392,192) for the candidate; ckat also remained unequal. No approximate
 catalogue was published, and no installed artwork was replaced. Exact Chocholousek
 calibration and end-to-end approved production update/undo remain open.
+
+## Next version: NG 2.0.1-r0
+
+The user requested moving to the new version. NG was upgraded from the previously
+installed 2.0.0-r0 package to 2.0.1-r0, containing the already tested improvements.
+The version is now centralized across package building, runtime and updater
+comparison, and appears in the home title to distinguish the loaded UI session.
+
+59 tests passed locally and on the receiver (Python 3.14.7, 5.70 seconds), plus the
+three native compiled Screen destruction checks. The actual 2.0.1 IPK was decoded,
+its metadata/scope checked, and every Python source compiled on the receiver.
+The package is 41,508 bytes with SHA-256
+`79188101d00fa4b0fd8e10327a640c53265fdcf89cb20862eee5b50dbda7faf0`.
+
+The opkg preflight proposed only NG, then the upgrade completed successfully.
+A source/data backup was retained under NG's plugin-backups directory. All 16
+installed payload files matched the verified IPK. The 47,243 installed picons had
+unchanged names, sizes and modification times; eight original samples also had
+unchanged SHA-256 hashes. Protected files and existing NG data were unchanged.
+Enigma2 PID stayed 16589 before/after the upgrade. No package force/reinstall flag,
+full reboot, GUI restart or live import reload was used.
+
+The user was asked for distinct approval for a single GUI restart to activate
+2.0.1 and complete its live screen checks. Until an affirmative reply arrives,
+the running session must be preserved. The new package still has status
+hardware-validation-required. Exact-style catalogue hosting/calibration and the
+approved end-to-end production artwork update/undo remain unfinished. The official
+root installer, update manifest and packages are unchanged.

@@ -10,8 +10,8 @@ from . import core, catalog, profile, updates, lyngsat, groups
 from .network import read_json
 from .storage import atomic_json
 from .cache import InventoryCache
+from . import __version__ as VERSION
 
-VERSION = '2.0.0'
 DATA = Path('/var/lib/piconmanager-ng')
 DEFAULT_MANIFEST = 'https://raw.githubusercontent.com/wacayoub/PiconManager-Pro/dev/piconmanager-ng-v2/ng/catalog/manifest.json'
 

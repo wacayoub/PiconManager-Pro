@@ -12,6 +12,7 @@ from enigma import getDesktop
 from .runtime import Manager, VERSION
 from .gui import Worker, Browser, ChannelRows
 from . import updates
+from . import PACKAGE_VERSION
 
 ENTRIES = ('Mes picons', 'Mettre à jour', 'Réglages')
 
@@ -56,7 +57,7 @@ class PiconManagerNGScreen(Screen, Worker):
         self.skin = neo_dark_skin(getDesktop(0).size().width())
         Screen.__init__(self, session)
         self.manager = Manager()
-        self['title'] = Label('PiconManager NG')
+        self['title'] = Label('PiconManager NG ' + VERSION)
         self['subtitle'] = Label('Vos picons, simplement')
         self['menu'] = MenuList(list(ENTRIES))
         self['info_title'] = Label('Mes chaînes')
@@ -392,7 +393,7 @@ class PiconManagerNGScreen(Screen, Worker):
     def plugin_update(self):
         from . import package
         def ready(doc):
-            installed = package.version_key(VERSION + '-r0')
+            installed = package.version_key(PACKAGE_VERSION)
             offered = package.version_key(doc['version'])
             if offered <= installed:
                 self.info('Le plugin est à jour : ' + VERSION)

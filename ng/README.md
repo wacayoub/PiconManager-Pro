@@ -1,8 +1,15 @@
 # PiconManager NG 2.x
 
 Branch: `dev/piconmanager-ng-v2`. Target: Vu+ Zero 4K, OpenATV 8.0.1 / Python 3.
-Version: 2.0.0-r0, prepared for hardware validation. Official 1.5.1 is preserved.
+Version: 2.0.1-r0, installed for hardware validation. Official 1.5.1 is preserved.
 See [VALIDATION.md](VALIDATION.md) for measured results and remaining release gates.
+
+NG 2.0.1 packages the simplified three-choice home, satellite/IPTV groups,
+favorites, persistent offline inventory, selective proposals, side-by-side preview
+and quick undo. The installed version is shown in the home title. Package builds,
+runtime diagnostics and update comparison share the same version metadata.
+The new-logo catalogue remains gated by exact Chocholousek calibration; installed
+artwork is preserved. This version does not replace the official 1.5.1 release.
 
 ## Implemented
 

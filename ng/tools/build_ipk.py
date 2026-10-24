@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ng/source'))
 from PiconManagerNG.package import PACKAGE, PREFIX, validate_package
-from PiconManagerNG import __version__
+from PiconManagerNG import PACKAGE_VERSION
 
 
 def tar_gz(files):
@@ -42,7 +42,7 @@ def ar(files):
 
 
 def build(destination):
-    version = __version__ + '-r0'
+    version = PACKAGE_VERSION
     files = {PREFIX + p.name: p.read_bytes().replace(b'\r\n', b'\n')
              for p in (ROOT / 'ng/source/PiconManagerNG').iterdir() if p.suffix in ('.py', '.txt') or p.name == 'LICENSE'}
     control = ('Package: %s\nVersion: %s\nArchitecture: all\nMaintainer: PiconManager Pro contributors\n'
